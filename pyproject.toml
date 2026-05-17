@@ -1,0 +1,39 @@
+[tool.pytest.ini_options]
+testpaths = ["tests"]
+markers = [
+    "slow: marks tests that require the sentence-transformer model (run with -m slow)",
+]
+addopts = "-q"
+
+[tool.ruff]
+target-version = "py311"
+line-length = 100
+select = [
+    "E",   # pycodestyle errors
+    "W",   # pycodestyle warnings
+    "F",   # pyflakes
+    "I",   # isort
+    "B",   # flake8-bugbear
+    "UP",  # pyupgrade
+]
+ignore = [
+    "E501",  # line length handled by formatter
+    "B008",  # do not perform function calls in defaults (Streamlit patterns trigger this)
+    "B904",  # raise from inside except (too strict for data ETL patterns)
+]
+exclude = ["backups/", ".venv/", "__pycache__/"]
+
+[tool.ruff.per-file-ignores]
+"pages/*.py" = ["E402"]  # Streamlit pages import after st calls
+"tests/*.py" = ["F401"]  # star imports in conftest are fine
+
+[tool.black]
+line-length = 100
+target-version = ["py311"]
+exclude = '''
+/(
+    backups
+  | \.venv
+  | __pycache__
+)/
+'''

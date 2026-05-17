@@ -1,0 +1,50 @@
+# Secrets — never commit
+.env
+.env.*
+*.env
+
+# Database — contains personal job search data
+*.db
+*.db-wal
+*.db-shm
+
+# Uploaded / migrated files
+*.migrated
+resume_vault.json
+
+# Personal resume files — do not commit to public repo
+*.docx
+*.pdf
+
+# Internal planning docs
+GAMEPLAN.md
+UPGRADES.md
+claude_ai_base.txt
+scanner.log
+job_alerts_config.json
+backups/
+cache/
+
+# Python
+__pycache__/
+*.pyc
+*.pyo
+*.pyd
+.Python
+*.egg-info/
+dist/
+build/
+.eggs/
+
+# Virtual envs
+.venv/
+venv/
+env/
+
+# macOS
+.DS_Store
+
+# Streamlit cache
+.streamlit/secrets.toml
+chroma_db/
+*.pickle

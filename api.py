@@ -22,7 +22,8 @@ app = FastAPI(
     version="1.0.0",
 )
 
-_ALLOWED_ORIGINS = [o.strip() for o in os.getenv("CORS_ORIGINS", "http://localhost:8501").split(",") if o.strip()]
+_DEFAULT_ORIGINS = "http://localhost:8501,https://*.hf.space,https://*.up.railway.app"
+_ALLOWED_ORIGINS = [o.strip() for o in os.getenv("CORS_ORIGINS", _DEFAULT_ORIGINS).split(",") if o.strip()]
 app.add_middleware(
     CORSMiddleware,
     allow_origins=_ALLOWED_ORIGINS,

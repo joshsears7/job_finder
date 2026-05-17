@@ -14,6 +14,10 @@ _client = None
 # Last error from _call_claude — readable by callers for user-facing messages
 _last_error: str = ""
 
+# Model constants — override via env vars to avoid touching code on model upgrades
+_HAIKU  = os.getenv("CLAUDE_MODEL_HAIKU",  "claude-haiku-4-5")
+_SONNET = os.getenv("CLAUDE_MODEL_SONNET", "claude-sonnet-4-6")
+
 
 def _sanitize(text: str, max_len: int = 4000) -> str:
     """Sanitize user-controlled text before inserting into a prompt.
@@ -67,7 +71,7 @@ def _call_claude(system: str, user: str, max_tokens: int = 2048, retries: int = 
     for attempt in range(retries + 1):
         try:
             with client.messages.stream(
-                model="claude-haiku-4-5",
+                model=_HAIKU,
                 max_tokens=max_tokens,
                 system=system,
                 messages=[{"role": "user", "content": user}],
@@ -99,10 +103,12 @@ def _call_claude(system: str, user: str, max_tokens: int = 2048, retries: int = 
     return None
 
 
-def _stream_claude(system: str, user: str, max_tokens: int = 2048, model: str = "claude-haiku-4-5"):
+def _stream_claude(system: str, user: str, max_tokens: int = 2048, model: str = None):
     """Generator that yields text chunks from Claude's streaming API. Use with st.write_stream()."""
     global _last_error
     _last_error = ""
+    if model is None:
+        model = _HAIKU
     client = _get_client()
     if client is None:
         _last_error = "ANTHROPIC_API_KEY not set — Claude features are unavailable."
@@ -158,7 +164,7 @@ Requirements:
 - Close: direct ask (not "I look forward to hearing from you") — e.g. "I'd welcome a conversation about..."
 - Under 280 words total"""
 
-    return _stream_claude(system, user, max_tokens=600, model="claude-sonnet-4-6")
+    return _stream_claude(system, user, max_tokens=600, model=_SONNET)
 
 
 def stream_about_claude(profile: dict, target_role: str = ""):
@@ -186,7 +192,7 @@ Instructions:
 - Sound like a person wrote it, not a template
 - 180-220 words"""
 
-    return _stream_claude(system, user, max_tokens=400, model="claude-sonnet-4-6")
+    return _stream_claude(system, user, max_tokens=400, model=_SONNET)
 
 
 def stream_coach_interview_claude(question: str, rough_answer: str, resume_text: str, job_title: str = ""):
@@ -837,7 +843,7 @@ def _call_claude_sonnet(system: str, user: str, max_tokens: int = 1500):
     try:
         full = ""
         with _client.messages.stream(
-            model="claude-sonnet-4-6",
+            model=_SONNET,
             max_tokens=max_tokens,
             system=[{"type": "text", "text": system,
                      "cache_control": {"type": "ephemeral"}}],

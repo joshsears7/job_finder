@@ -16,6 +16,8 @@ from dotenv import load_dotenv
 
 load_dotenv()
 
+_SONNET = os.getenv("CLAUDE_MODEL_SONNET", "claude-sonnet-4-6")
+
 _HEADERS = {
     "User-Agent": (
         "Mozilla/5.0 (Macintosh; Intel Mac OS X 10_15_7) "
@@ -334,7 +336,7 @@ Return ONLY valid JSON."""
 
     try:
         with client.messages.stream(
-            model="claude-sonnet-4-6",
+            model=_SONNET,
             max_tokens=1200,
             system=[{"type": "text", "text": system, "cache_control": {"type": "ephemeral"}}],
             messages=[{"role": "user", "content": user}],

@@ -21,6 +21,21 @@ if not profile:
 
 # ── Requirements check ────────────────────────────────────────────
 import os
+
+# Auto Apply requires a local desktop environment — not available on cloud deployments
+_IS_CLOUD = bool(os.getenv("SPACE_ID") or os.getenv("RAILWAY_ENVIRONMENT"))
+if _IS_CLOUD:
+    st.markdown(
+        alert(
+            "<b>Auto Apply is a desktop-only feature.</b> It requires a local browser (Playwright + Chromium) "
+            "and your LinkedIn credentials stored locally in <code>.env</code>. "
+            "Clone the repo and run locally to use this feature.",
+            "blue"
+        ),
+        unsafe_allow_html=True,
+    )
+    st.stop()
+
 _has_pw = False
 try:
     import playwright
@@ -52,6 +67,7 @@ if not _has_creds:
         ),
         unsafe_allow_html=True,
     )
+    st.stop()
 
 st.markdown(
     "<div style='background:#0f172a;border:1px solid #f59e0b40;border-radius:10px;"

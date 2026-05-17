@@ -26,25 +26,31 @@ sys.path.insert(0, os.path.dirname(__file__))
 from dotenv import load_dotenv
 load_dotenv()
 
-logging.basicConfig(
-    filename=os.path.join(os.path.dirname(__file__), "scanner.log"),
-    level=logging.INFO,
-    format="%(asctime)s [SCANNER] %(message)s",
-)
+_IS_CLOUD = bool(os.getenv("SPACE_ID") or os.getenv("RAILWAY_ENVIRONMENT"))
+if _IS_CLOUD:
+    logging.basicConfig(stream=sys.stdout, level=logging.INFO,
+                        format="%(asctime)s [SCANNER] %(message)s")
+else:
+    logging.basicConfig(
+        filename=os.path.join(os.path.dirname(__file__), "scanner.log"),
+        level=logging.INFO,
+        format="%(asctime)s [SCANNER] %(message)s",
+    )
 log = logging.getLogger("scanner")
 
 
 def send_notification(title: str, message: str, subtitle: str = ""):
-    """Send a macOS notification via osascript."""
+    """Send a macOS notification via osascript. No-op on non-macOS or cloud environments."""
+    if sys.platform != "darwin" or _IS_CLOUD:
+        return
     try:
-        sub = f'subtitle "{subtitle}"' if subtitle else ""
         script = (
             f'display notification "{message}" with title "{title}"'
             + (f' subtitle "{subtitle}"' if subtitle else "")
         )
         subprocess.run(["osascript", "-e", script], timeout=5, capture_output=True)
     except Exception:
-        pass  # Notifications are best-effort
+        pass
 
 
 def _score_job_fast(resume_text: str, job_description: str, job_title: str,

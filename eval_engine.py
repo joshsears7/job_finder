@@ -32,7 +32,7 @@ def _init():
             CREATE TABLE IF NOT EXISTS eval_results (
                 id           INTEGER PRIMARY KEY AUTOINCREMENT,
                 output_type  TEXT NOT NULL,
-                model        TEXT DEFAULT 'claude-haiku-4-5',
+                model        TEXT DEFAULT 'haiku',
                 relevance    INTEGER,
                 grounding    INTEGER,
                 specificity  INTEGER,
@@ -196,7 +196,7 @@ def evaluate(
     output_type: str,
     resume_text: str = "",
     job_description: str = "",
-    model: str = "claude-haiku-4-5",
+    model: str = "haiku",
     persist: bool = True,
 ) -> dict:
     """

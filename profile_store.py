@@ -9,14 +9,16 @@ All JSON list fields stored as JSON strings.
 import json
 import logging
 import os
-import sqlite3
 import threading
 from datetime import datetime
+from pathlib import Path
+
+import db as _db
 
 _db_lock = threading.Lock()
 _log = logging.getLogger(__name__)
 
-DB_PATH = os.path.join(os.path.dirname(__file__), "applications.db")
+_SQLITE_PATH = Path(__file__).parent / "applications.db"
 
 _DEFAULT_PROFILE = {
     "user_id": 1,
@@ -58,11 +60,7 @@ _DEFAULT_PROFILE = {
 
 
 def _connect():
-    conn = sqlite3.connect(DB_PATH, check_same_thread=True, timeout=10)
-    conn.row_factory = sqlite3.Row
-    conn.execute("PRAGMA journal_mode=WAL")
-    conn.execute("PRAGMA synchronous=NORMAL")
-    return conn
+    return _db.connect(_SQLITE_PATH)
 
 
 _JSON_FIELDS = {
@@ -99,7 +97,7 @@ _PROFILE_COLS = frozenset(_DEFAULT_PROFILE.keys()) | {"updated_at"}
 def init_profiles():
     with _db_lock:
         conn = _connect()
-        conn.execute("""
+        _db.create_table(conn, """
             CREATE TABLE IF NOT EXISTS user_profiles (
                 id                   INTEGER PRIMARY KEY AUTOINCREMENT,
                 user_id              INTEGER UNIQUE DEFAULT 1,
@@ -136,27 +134,24 @@ def init_profiles():
                 updated_at           TEXT DEFAULT ''
             )
         """)
-        # Seed default profile if none exists
-        existing = conn.execute("SELECT id FROM user_profiles WHERE user_id=1").fetchone()
+        # Seed default profile for user_id=1 if none exists
+        existing = conn.execute(f"SELECT id FROM user_profiles WHERE user_id=1").fetchone()
         if not existing:
             seed = _serialize(_DEFAULT_PROFILE)
             seed["updated_at"] = datetime.now().isoformat()
             cols = ", ".join(k for k in seed if k != "user_id")
-            placeholders = ", ".join("?" for k in seed if k != "user_id")
+            placeholders = ", ".join(_db.P for k in seed if k != "user_id")
             vals = [v for k, v in seed.items() if k != "user_id"]
             conn.execute(
                 f"INSERT INTO user_profiles (user_id, {cols}) VALUES (1, {placeholders})",
                 vals,
             )
-        # Migrations — add columns that didn't exist in older schema versions
+        # Schema migrations
         for col, definition in [
             ("portfolio_url",  "TEXT DEFAULT ''"),
             ("star_stories",   "TEXT DEFAULT '[]'"),
         ]:
-            try:
-                conn.execute(f"ALTER TABLE user_profiles ADD COLUMN {col} {definition}")
-            except Exception:
-                pass  # column already exists
+            _db.add_column_if_missing(conn, "user_profiles", col, definition)
         conn.commit()
         conn.close()
 
@@ -164,7 +159,7 @@ def init_profiles():
 def get_profile(user_id: int = 1) -> dict:
     conn = _connect()
     row = conn.execute(
-        "SELECT * FROM user_profiles WHERE user_id=?", (user_id,)
+        f"SELECT * FROM user_profiles WHERE user_id={_db.P}", (user_id,)
     ).fetchone()
     conn.close()
     if row:
@@ -179,11 +174,10 @@ def save_profile(profile: dict, user_id: int = 1):
         data["updated_at"] = datetime.now().isoformat()
         data.pop("id", None)
         data.pop("user_id", None)
-        # Whitelist columns to prevent dynamic SQL injection
         data = {k: v for k, v in data.items() if k in _PROFILE_COLS}
-        fields = ", ".join(f"{k}=?" for k in data)
+        fields = ", ".join(f"{k}={_db.P}" for k in data)
         conn.execute(
-            f"UPDATE user_profiles SET {fields} WHERE user_id=?",
+            f"UPDATE user_profiles SET {fields} WHERE user_id={_db.P}",
             list(data.values()) + [user_id],
         )
         conn.commit()
@@ -193,17 +187,17 @@ def save_profile(profile: dict, user_id: int = 1):
 def get_resume_text(user_id: int = 1) -> str:
     conn = _connect()
     row = conn.execute(
-        "SELECT resume_text FROM user_profiles WHERE user_id=?", (user_id,)
+        f"SELECT resume_text FROM user_profiles WHERE user_id={_db.P}", (user_id,)
     ).fetchone()
     conn.close()
-    return (row["resume_text"] or "") if row else ""
+    return (dict(row).get("resume_text") or "") if row else ""
 
 
 def set_resume_text(text: str, user_id: int = 1):
     with _db_lock:
         conn = _connect()
         conn.execute(
-            "UPDATE user_profiles SET resume_text=?, updated_at=? WHERE user_id=?",
+            f"UPDATE user_profiles SET resume_text={_db.P}, updated_at={_db.P} WHERE user_id={_db.P}",
             (text, datetime.now().isoformat(), user_id),
         )
         conn.commit()
@@ -214,14 +208,15 @@ def get_star_stories(user_id: int = 1) -> list:
     conn = _connect()
     try:
         row = conn.execute(
-            "SELECT star_stories FROM user_profiles WHERE user_id=?", (user_id,)
+            f"SELECT star_stories FROM user_profiles WHERE user_id={_db.P}", (user_id,)
         ).fetchone()
     except Exception:
         row = None
     conn.close()
-    if row and row[0]:
+    star_val = dict(row).get("star_stories") if row else None
+    if star_val:
         try:
-            return json.loads(row[0])
+            return json.loads(star_val)
         except Exception:
             return []
     return []
@@ -233,7 +228,7 @@ def set_star_stories(stories: list, user_id: int = 1) -> bool:
         conn = _connect()
         try:
             conn.execute(
-                "UPDATE user_profiles SET star_stories=?, updated_at=? WHERE user_id=?",
+                f"UPDATE user_profiles SET star_stories={_db.P}, updated_at={_db.P} WHERE user_id={_db.P}",
                 (json.dumps(stories), datetime.now().isoformat(), user_id),
             )
             conn.commit()

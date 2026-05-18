@@ -1,52 +1,43 @@
-import sqlite3
 import os
 import threading
 from datetime import datetime
+from pathlib import Path
 
-DB_PATH = os.path.join(os.path.dirname(__file__), "applications.db")
+import db
+
+_SQLITE_PATH = Path(__file__).parent / "applications.db"
 _db_lock = threading.Lock()
 
 STATUSES = ["saved", "applied", "interview", "offer", "rejected"]
 
 
 def _connect():
-    conn = sqlite3.connect(DB_PATH, check_same_thread=True, timeout=10)
-    conn.row_factory = sqlite3.Row
-    conn.execute("PRAGMA journal_mode=WAL")
-    conn.execute("PRAGMA synchronous=NORMAL")
-    conn.execute("PRAGMA cache_size=-8000")
-    return conn
+    return db.connect(_SQLITE_PATH)
 
 
 def init_db():
     conn = _connect()
-    conn.execute("""
+    db.create_table(conn, """
         CREATE TABLE IF NOT EXISTS applications (
-            id          INTEGER PRIMARY KEY AUTOINCREMENT,
-            job_id      TEXT UNIQUE,
-            title       TEXT,
-            company     TEXT,
-            location    TEXT,
-            url         TEXT,
-            score       INTEGER DEFAULT 0,
-            source      TEXT,
-            status      TEXT DEFAULT 'saved',
-            date_saved  TEXT,
-            date_applied TEXT,
-            notes       TEXT,
-            salary_min  REAL,
-            salary_max  REAL,
+            id             INTEGER PRIMARY KEY AUTOINCREMENT,
+            job_id         TEXT UNIQUE,
+            title          TEXT,
+            company        TEXT,
+            location       TEXT,
+            url            TEXT,
+            score          INTEGER DEFAULT 0,
+            source         TEXT,
+            status         TEXT DEFAULT 'saved',
+            date_saved     TEXT,
+            date_applied   TEXT,
+            notes          TEXT,
+            salary_min     REAL,
+            salary_max     REAL,
             resume_version TEXT
         )
     """)
-    # Migration: add resume_version to existing DBs
-    try:
-        conn.execute("ALTER TABLE applications ADD COLUMN resume_version TEXT")
-        conn.commit()
-    except Exception:
-        pass
-
-    conn.execute("""
+    db.add_column_if_missing(conn, "applications", "resume_version", "TEXT")
+    db.create_table(conn, """
         CREATE TABLE IF NOT EXISTS followup_schedule (
             id           INTEGER PRIMARY KEY AUTOINCREMENT,
             app_id       INTEGER NOT NULL,
@@ -58,8 +49,7 @@ def init_db():
             completed_at TEXT
         )
     """)
-
-    conn.execute("""
+    db.create_table(conn, """
         CREATE TABLE IF NOT EXISTS scanner_runs (
             id             INTEGER PRIMARY KEY AUTOINCREMENT,
             user_id        INTEGER DEFAULT 1,
@@ -72,7 +62,6 @@ def init_db():
             duration_secs  REAL DEFAULT 0
         )
     """)
-
     conn.commit()
     conn.close()
 
@@ -80,10 +69,10 @@ def init_db():
 def save_job(job, score=0, resume_version=None):
     with _db_lock:
         conn = _connect()
-        cur = conn.execute("""
+        cur = conn.execute(f"""
             INSERT OR IGNORE INTO applications
                 (job_id, title, company, location, url, score, source, status, date_saved, salary_min, salary_max, resume_version)
-            VALUES (?, ?, ?, ?, ?, ?, ?, 'saved', ?, ?, ?, ?)
+            VALUES ({db.P},{db.P},{db.P},{db.P},{db.P},{db.P},{db.P},'saved',{db.P},{db.P},{db.P},{db.P})
         """, (
             job["id"], job["title"], job["company"], job["location"],
             job["url"], score, job["source"],
@@ -139,24 +128,25 @@ def update_status(app_id, status, notes=None):
     with _db_lock:
         conn = _connect()
         if notes is not None:
-            conn.execute("UPDATE applications SET status=?, notes=? WHERE id=?", (status, notes, app_id))
+            conn.execute(f"UPDATE applications SET status={db.P}, notes={db.P} WHERE id={db.P}", (status, notes, app_id))
         else:
-            conn.execute("UPDATE applications SET status=? WHERE id=?", (status, app_id))
+            conn.execute(f"UPDATE applications SET status={db.P} WHERE id={db.P}", (status, app_id))
         if status == "applied":
             existing_date = conn.execute(
-                "SELECT date_applied FROM applications WHERE id=?", (app_id,)
+                f"SELECT date_applied FROM applications WHERE id={db.P}", (app_id,)
             ).fetchone()
-            if not existing_date or not existing_date[0]:
+            date_applied = dict(existing_date).get("date_applied") if existing_date else None
+            if not date_applied:
                 today = datetime.now().isoformat()[:10]
-                conn.execute("UPDATE applications SET date_applied=? WHERE id=?", (today, app_id))
+                conn.execute(f"UPDATE applications SET date_applied={db.P} WHERE id={db.P}", (today, app_id))
                 from datetime import date, timedelta
                 due = (date.today() + timedelta(days=7)).isoformat()
                 existing_fu = conn.execute(
-                    "SELECT id FROM followup_schedule WHERE app_id=? AND status='pending'", (app_id,)
+                    f"SELECT id FROM followup_schedule WHERE app_id={db.P} AND status='pending'", (app_id,)
                 ).fetchone()
                 if not existing_fu:
                     conn.execute(
-                        "INSERT INTO followup_schedule (app_id, due_date, status, created_at) VALUES (?,?,?,?)",
+                        f"INSERT INTO followup_schedule (app_id, due_date, status, created_at) VALUES ({db.P},{db.P},{db.P},{db.P})",
                         (app_id, due, "pending", datetime.now().isoformat()),
                     )
         conn.commit()
@@ -165,14 +155,14 @@ def update_status(app_id, status, notes=None):
 
 def delete_app(app_id):
     conn = _connect()
-    conn.execute("DELETE FROM applications WHERE id=?", (app_id,))
+    conn.execute(f"DELETE FROM applications WHERE id={db.P}", (app_id,))
     conn.commit()
     conn.close()
 
 
 def is_saved(job_id):
     conn = _connect()
-    result = conn.execute("SELECT id FROM applications WHERE job_id=?", (job_id,)).fetchone()
+    result = conn.execute(f"SELECT id FROM applications WHERE job_id={db.P}", (job_id,)).fetchone()
     conn.close()
     return result is not None
 
@@ -184,7 +174,7 @@ init_db()
 
 def _init_resume_vault():
     conn = _connect()
-    conn.execute("""
+    db.create_table(conn, """
         CREATE TABLE IF NOT EXISTS resume_versions (
             id         INTEGER PRIMARY KEY AUTOINCREMENT,
             name       TEXT UNIQUE NOT NULL,
@@ -210,11 +200,12 @@ def _migrate_vault_from_json():
         if not data:
             return
         conn = _connect()
-        count = conn.execute("SELECT COUNT(*) FROM resume_versions").fetchone()[0]
+        row = conn.execute("SELECT COUNT(*) as cnt FROM resume_versions").fetchone()
+        count = dict(row).get("cnt", 0) if row else 0
         if count == 0:
             for name, v in data.items():
                 conn.execute(
-                    "INSERT OR IGNORE INTO resume_versions (name, text, score, date_saved) VALUES (?,?,?,?)",
+                    f"INSERT OR IGNORE INTO resume_versions (name, text, score, date_saved) VALUES ({db.P},{db.P},{db.P},{db.P})",
                     (name, v.get("text", ""), v.get("score", 0), v.get("saved", "")),
                 )
             conn.commit()
@@ -228,9 +219,9 @@ def save_vault_version(name: str, text: str, score: int, date_saved: str = None)
     """Upsert a resume version by name."""
     conn = _connect()
     conn.execute(
-        """
+        f"""
         INSERT INTO resume_versions (name, text, score, date_saved)
-        VALUES (?, ?, ?, ?)
+        VALUES ({db.P},{db.P},{db.P},{db.P})
         ON CONFLICT(name) DO UPDATE SET
             text       = excluded.text,
             score      = excluded.score,
@@ -254,7 +245,7 @@ def get_vault() -> dict:
 
 def delete_vault_version(name: str):
     conn = _connect()
-    conn.execute("DELETE FROM resume_versions WHERE name=?", (name,))
+    conn.execute(f"DELETE FROM resume_versions WHERE name={db.P}", (name,))
     conn.commit()
     conn.close()
 
@@ -269,7 +260,7 @@ CONTACT_STATUSES = ["warm", "hot", "cold", "reached out", "replied", "met", "ref
 
 def _init_contacts():
     conn = _connect()
-    conn.execute("""
+    db.create_table(conn, """
         CREATE TABLE IF NOT EXISTS contacts (
             id           INTEGER PRIMARY KEY AUTOINCREMENT,
             name         TEXT NOT NULL,
@@ -295,10 +286,10 @@ _init_contacts()
 def save_contact(name, company="", role="", how_met="", email="",
                  linkedin="", status="warm", next_action="", notes=""):
     conn = _connect()
-    conn.execute("""
+    conn.execute(f"""
         INSERT INTO contacts
             (name, company, role, how_met, email, linkedin, status, next_action, notes, date_added)
-        VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+        VALUES ({db.P},{db.P},{db.P},{db.P},{db.P},{db.P},{db.P},{db.P},{db.P},{db.P})
     """, (name, company, role, how_met, email, linkedin, status,
           next_action, notes, datetime.now().isoformat()[:10]))
     conn.commit()
@@ -326,9 +317,9 @@ def update_contact(contact_id, **kwargs):
     # so we verify each one is a known-safe identifier before use.
     for col in safe:
         assert col in _CONTACT_COLS, f"Blocked unsafe column: {col!r}"
-    fields = ", ".join(f"{col}=?" for col in safe)
+    fields = ", ".join(f"{col}={db.P}" for col in safe)
     conn = _connect()
-    conn.execute(f"UPDATE contacts SET {fields} WHERE id=?",
+    conn.execute(f"UPDATE contacts SET {fields} WHERE id={db.P}",
                  list(safe.values()) + [contact_id])
     conn.commit()
     conn.close()
@@ -336,7 +327,7 @@ def update_contact(contact_id, **kwargs):
 
 def delete_contact(contact_id):
     conn = _connect()
-    conn.execute("DELETE FROM contacts WHERE id=?", (contact_id,))
+    conn.execute(f"DELETE FROM contacts WHERE id={db.P}", (contact_id,))
     conn.commit()
     conn.close()
 
@@ -347,12 +338,12 @@ def get_due_followups(user_id: int = 1) -> list:
     """Return pending follow-ups due today or earlier, joined with application data."""
     from datetime import date
     conn = _connect()
-    rows = conn.execute("""
+    rows = conn.execute(f"""
         SELECT f.id as followup_id, f.app_id, f.due_date, f.draft_text,
                a.title, a.company, a.url, a.date_applied, a.notes
         FROM followup_schedule f
         JOIN applications a ON a.id = f.app_id
-        WHERE f.user_id=? AND f.status='pending' AND f.due_date <= ?
+        WHERE f.user_id={db.P} AND f.status='pending' AND f.due_date <= {db.P}
         ORDER BY f.due_date
     """, (user_id, date.today().isoformat())).fetchall()
     conn.close()
@@ -361,11 +352,11 @@ def get_due_followups(user_id: int = 1) -> list:
 
 def get_all_followups(user_id: int = 1) -> list:
     conn = _connect()
-    rows = conn.execute("""
+    rows = conn.execute(f"""
         SELECT f.*, a.title, a.company, a.date_applied
         FROM followup_schedule f
         JOIN applications a ON a.id = f.app_id
-        WHERE f.user_id=?
+        WHERE f.user_id={db.P}
         ORDER BY f.due_date
     """, (user_id,)).fetchall()
     conn.close()
@@ -375,7 +366,7 @@ def get_all_followups(user_id: int = 1) -> list:
 def complete_followup(followup_id: int):
     conn = _connect()
     conn.execute(
-        "UPDATE followup_schedule SET status='sent', completed_at=? WHERE id=?",
+        f"UPDATE followup_schedule SET status='sent', completed_at={db.P} WHERE id={db.P}",
         (datetime.now().isoformat(), followup_id),
     )
     conn.commit()
@@ -385,7 +376,7 @@ def complete_followup(followup_id: int):
 def skip_followup(followup_id: int):
     conn = _connect()
     conn.execute(
-        "UPDATE followup_schedule SET status='skipped', completed_at=? WHERE id=?",
+        f"UPDATE followup_schedule SET status='skipped', completed_at={db.P} WHERE id={db.P}",
         (datetime.now().isoformat(), followup_id),
     )
     conn.commit()
@@ -395,7 +386,7 @@ def skip_followup(followup_id: int):
 def save_followup_draft(followup_id: int, draft: str):
     conn = _connect()
     conn.execute(
-        "UPDATE followup_schedule SET draft_text=? WHERE id=?", (draft, followup_id)
+        f"UPDATE followup_schedule SET draft_text={db.P} WHERE id={db.P}", (draft, followup_id)
     )
     conn.commit()
     conn.close()
@@ -411,10 +402,11 @@ def get_health_score(user_id: int = 1) -> dict:
         "SELECT status, date_applied FROM applications"
     ).fetchall()]
     try:
-        due_followups = conn.execute(
-            "SELECT COUNT(*) FROM followup_schedule WHERE user_id=? AND status='pending' AND due_date <= ?",
+        row = conn.execute(
+            f"SELECT COUNT(*) as cnt FROM followup_schedule WHERE user_id={db.P} AND status='pending' AND due_date <= {db.P}",
             (user_id, date.today().isoformat()),
-        ).fetchone()[0]
+        ).fetchone()
+        due_followups = dict(row).get("cnt", 0) if row else 0
     except Exception:
         due_followups = 0
     conn.close()
@@ -444,11 +436,11 @@ def get_health_score(user_id: int = 1) -> dict:
 def log_scanner_run(jobs_found=0, jobs_saved=0, jobs_notified=0,
                     cities="", roles="", duration=0.0, user_id=1):
     conn = _connect()
-    conn.execute("""
+    conn.execute(f"""
         INSERT INTO scanner_runs
             (user_id, run_at, jobs_found, jobs_saved, jobs_notified,
              cities_scanned, roles_scanned, duration_secs)
-        VALUES (?,?,?,?,?,?,?,?)
+        VALUES ({db.P},{db.P},{db.P},{db.P},{db.P},{db.P},{db.P},{db.P})
     """, (user_id, datetime.now().isoformat(), jobs_found, jobs_saved,
           jobs_notified, cities, roles, duration))
     conn.commit()
@@ -458,7 +450,7 @@ def log_scanner_run(jobs_found=0, jobs_saved=0, jobs_notified=0,
 def get_scanner_runs(limit=10, user_id=1) -> list:
     conn = _connect()
     rows = conn.execute(
-        "SELECT * FROM scanner_runs WHERE user_id=? ORDER BY run_at DESC LIMIT ?",
+        f"SELECT * FROM scanner_runs WHERE user_id={db.P} ORDER BY run_at DESC LIMIT {db.P}",
         (user_id, limit),
     ).fetchall()
     conn.close()

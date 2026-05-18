@@ -84,12 +84,13 @@ def tmp_db(tmp_path, monkeypatch):
     Returns the db path (rarely needed directly).
     """
     import tracker as tr
+    from pathlib import Path
 
-    db_path = str(tmp_path / "test_applications.db")
-    monkeypatch.setattr(tr, "DB_PATH", db_path)
+    db_path = tmp_path / "test_applications.db"
+    monkeypatch.setattr(tr, "_SQLITE_PATH", db_path)
 
     # Reinitialize all tables in the temp db
     tr.init_db()
     tr._init_contacts()
     tr._init_resume_vault()
-    yield db_path
+    yield str(db_path)

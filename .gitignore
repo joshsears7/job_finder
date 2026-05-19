@@ -2,6 +2,7 @@
 .env
 .env.*
 *.env
+!.env.example
 
 # Database — contains personal job search data
 *.db

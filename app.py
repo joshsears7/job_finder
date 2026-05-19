@@ -165,12 +165,7 @@ with st.sidebar:
     import profile_store as _ps
     _all_profiles = []
     try:
-        import sqlite3 as _sq3
-        _uc2 = _sq3.connect(_ps.DB_PATH)
-        _uc2.row_factory = _sq3.Row
-        _rows2 = _uc2.execute("SELECT user_id, name FROM user_profiles ORDER BY user_id").fetchall()
-        _uc2.close()
-        _all_profiles = [(r["user_id"], r["name"]) for r in _rows2]
+        _all_profiles = _ps.get_all_profiles()
     except Exception:
         pass
 
@@ -391,7 +386,7 @@ def _dashboard_impl():
     <span class='stat-pill'><strong>3</strong> job sources</span>
     <span class='stat-pill'><strong>23</strong> writing tools</span>
     <span class='stat-pill'><strong>0</strong> paywalls</span>
-    <span class='stat-pill'><strong>100%</strong> local AI</span>
+    <span class='stat-pill'><strong>AI-powered</strong></span>
   </div>
 </div>
 """, unsafe_allow_html=True)
@@ -503,9 +498,9 @@ def _dashboard_impl():
         st.markdown("<br>", unsafe_allow_html=True)
         st.markdown(
             "<div style='text-align:center;color:#94a3b8;font-size:12px'>"
-            "🔒 Your resume is processed locally — never stored or shared &nbsp;·&nbsp; "
+            "🔒 Resume scoring runs on-server — your data never leaves CareerIQ &nbsp;·&nbsp; "
             "📡 Live data from FRED, BLS, Adzuna, Jobicy &nbsp;·&nbsp; "
-            "🤖 AI runs entirely on your machine (sentence-transformers)"
+            "🤖 Semantic matching via sentence-transformers · Writing tools powered by Claude"
             "</div>", unsafe_allow_html=True
         )
 

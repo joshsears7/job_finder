@@ -35,14 +35,14 @@
 ## Tech Stack
 
 - **Frontend** — Streamlit (multi-page, custom CSS design system)
-- **AI** — Anthropic Claude API (claude-sonnet-4-5) for all generative tasks
+- **AI** — Anthropic Claude API (claude-sonnet-4-6 / claude-haiku-4-5) for all generative tasks
 - **Semantic Search** — ChromaDB + `sentence-transformers/all-MiniLM-L6-v2`
 - **Auth** — bcrypt password hashing, backward-compatible SHA256 migration path
-- **Storage** — SQLite (users, applications, analytics, contacts, job alerts)
-- **PDF** — pdfplumber (parse) + fpdf2 (export cover letters and apply packages)
+- **Storage** — PostgreSQL on cloud (Neon) · SQLite locally — dual-mode via `db.py` abstraction
+- **PDF** — pdfplumber with two-column layout detection · fpdf2 for cover letter/package export
 - **Data** — FRED API, BLS static projections, Adzuna job listings API, RapidAPI JSearch
 - **REST API** — FastAPI layer (`api.py`) for headless/server-to-server access
-- **Testing** — pytest with class-based tests, `@pytest.mark.slow` for model-gated tests
+- **Testing** — pytest, 92 tests across 4 modules, `@pytest.mark.slow` for model-gated tests
 - **CI** — GitHub Actions (lint + fast test suite on every push)
 - **Deploy** — Railway (nixpacks, auto-restart)
 
@@ -154,6 +154,7 @@ Open `http://localhost:8501` — click **Try Live Demo** to explore without crea
 | Variable | Required | Purpose |
 |---|---|---|
 | `ANTHROPIC_API_KEY` | Yes | All AI features |
+| `DATABASE_URL` | Cloud only | PostgreSQL connection string (Neon/Supabase) — falls back to SQLite locally |
 | `ADZUNA_APP_ID` / `ADZUNA_APP_KEY` | Optional | Live job listings |
 | `JSEARCH_API_KEY` | Optional | Additional job source (RapidAPI) |
 | `FRED_KEY` | Optional | Economic market data |
@@ -168,7 +169,7 @@ pytest -m slow                  # include model-dependent tests
 pytest --cov=. --cov-report=term-missing
 ```
 
-The test suite covers the scoring engine, tracker CRUD, job fetcher, and salary intelligence — 50+ assertions across 4 modules.
+The test suite covers the scoring engine, tracker CRUD, job fetcher, and salary intelligence — 92 tests across 4 modules.
 
 ---
 

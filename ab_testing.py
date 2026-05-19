@@ -10,8 +10,9 @@ import sqlite3
 import threading
 import logging
 from datetime import datetime, date
+from pathlib import Path
 
-_DB = "ab_testing.db"
+_DB = str(Path(__file__).parent / "ab_testing.db")
 _lock = threading.Lock()
 _log = logging.getLogger(__name__)
 

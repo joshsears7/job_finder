@@ -44,22 +44,41 @@ SKILL_ALIASES: dict[str, str] = {
     "plsql":          "sql",
     "pl/sql":         "sql",
     "powerbi":        "power bi",
-    "looker":         "tableau",   # BI tool family
-    "dask":           "pandas",
-    "xgboost":        "scikit-learn",
-    "lightgbm":       "scikit-learn",
-    "bash script":    "bash",
-    "shell":          "bash",
-    "linux/unix":     "linux",
-    "unix":           "linux",
-    "agile/scrum":    "agile",
-    "google ads":     "google analytics",
-    "hubspot":        "salesforce",
-    "github":         "git",
-    "gitlab":         "git",
-    "bitbucket":      "git",
-    "sketch":         "figma",
-    "adobe xd":       "figma",
+    "looker studio":       "looker",
+    "google looker":       "looker",
+    "dask":                "pandas",
+    "xgboost":             "scikit-learn",
+    "lightgbm":            "scikit-learn",
+    "bash script":         "bash",
+    "shell":               "bash",
+    "linux/unix":          "linux",
+    "unix":                "linux",
+    "agile/scrum":         "agile",
+    "google ads":          "google analytics",
+    "ga4":                 "google analytics",
+    "hubspot":             "salesforce",
+    "github":              "git",
+    "gitlab":              "git",
+    "bitbucket":           "git",
+    "sketch":              "figma",
+    "adobe xd":            "figma",
+    "google sheets":       "excel",
+    "gsheets":             "excel",
+    "ms excel":            "excel",
+    "microsoft excel":     "excel",
+    "vba":                 "excel",
+    "snowflake":           "sql",
+    "redshift":            "sql",
+    "bigquery":            "sql",
+    "databricks":          "spark",
+    "pyspark":             "spark",
+    "ms sql server":       "sql",
+    "microsoft sql":       "sql",
+    "oracle sql":          "sql",
+    "spss":                "statistics",
+    "stata":               "statistics",
+    "sas":                 "statistics",
+    "microsoft power bi":  "power bi",
 }
 
 COMMON_SKILLS = [
@@ -72,7 +91,7 @@ COMMON_SKILLS = [
     # Data / ML
     "postgresql", "mysql", "mongodb", "redis", "elasticsearch",
     "pandas", "numpy", "scikit-learn", "tensorflow", "pytorch", "keras",
-    "spark", "hadoop", "airflow", "dbt", "tableau", "power bi",
+    "spark", "hadoop", "airflow", "dbt", "tableau", "power bi", "looker",
     # Cloud / DevOps
     "aws", "azure", "gcp", "docker", "kubernetes", "terraform", "ansible",
     "jenkins", "git", "linux", "ci/cd",
@@ -117,6 +136,50 @@ _CONTACT_LINE_RE = re.compile(r"@|\d{3}[\s.\-]\d{3}|linkedin|github|http|www\.",
 
 # ── File text extraction ───────────────────────────────────────────
 
+def _col_to_text(words: list) -> str:
+    """Reconstruct readable lines from a list of pdfplumber word dicts."""
+    if not words:
+        return ""
+    words = sorted(words, key=lambda w: (round(w["top"] / 4), w["x0"]))
+    lines, cur_line, cur_top = [], [], words[0]["top"]
+    for w in words:
+        if abs(w["top"] - cur_top) > 4:
+            if cur_line:
+                lines.append(" ".join(cur_line))
+            cur_line, cur_top = [w["text"]], w["top"]
+        else:
+            cur_line.append(w["text"])
+    if cur_line:
+        lines.append(" ".join(cur_line))
+    return "\n".join(lines)
+
+
+def _extract_page_text(page) -> str:
+    """
+    Layout-aware page extraction.
+
+    Detects two-column layouts by checking how many words physically cross
+    the page's vertical centerline. If fewer than 5% of words straddle the
+    center, the page is split into left and right columns extracted separately
+    (left column first), so section headers and bullets stay in reading order.
+    Falls back to pdfplumber's default extraction for single-column pages.
+    """
+    words = page.extract_words(x_tolerance=3, y_tolerance=3)
+    if not words:
+        return page.extract_text() or ""
+
+    mid = float(page.width) / 2.0
+    crossing = sum(1 for w in words if w["x0"] < mid < w["x1"])
+
+    if len(words) > 10 and crossing / len(words) < 0.05:
+        left  = [w for w in words if w["x0"] < mid]
+        right = [w for w in words if w["x0"] >= mid]
+        if left and right and len(right) > len(words) * 0.10:
+            return (_col_to_text(left) + "\n" + _col_to_text(right)).strip()
+
+    return page.extract_text() or ""
+
+
 def extract_text(file_path: str) -> str:
     """Extract plain text from a PDF or DOCX file path."""
     ext = file_path.rsplit(".", 1)[-1].lower()
@@ -125,7 +188,7 @@ def extract_text(file_path: str) -> str:
         try:
             with pdfplumber.open(file_path) as pdf:
                 for page in pdf.pages:
-                    t = page.extract_text()
+                    t = _extract_page_text(page)
                     if t:
                         parts.append(t)
         except Exception as e:

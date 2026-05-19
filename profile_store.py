@@ -156,6 +156,16 @@ def init_profiles():
         conn.close()
 
 
+def get_all_profiles() -> list[tuple[int, str]]:
+    """Return [(user_id, name), ...] for all users — used by the profile switcher."""
+    conn = _connect()
+    rows = conn.execute(
+        "SELECT user_id, name FROM user_profiles ORDER BY user_id"
+    ).fetchall()
+    conn.close()
+    return [(r["user_id"], r["name"]) for r in rows]
+
+
 def get_profile(user_id: int = 1) -> dict:
     conn = _connect()
     row = conn.execute(

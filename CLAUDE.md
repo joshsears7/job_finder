@@ -11,7 +11,7 @@ cd ~/Documents/Projects/job_finder && streamlit run app.py
 - Keeps 10 most recent snapshots, prunes older ones automatically
 - **"Save" or "backup" = run `bash ~/Documents/Projects/job_finder/backup.sh`**
 
-## Architecture: 40 Python files total
+## Architecture: 48 Python files total
 
 ### Entry points
 | File | Role |
@@ -22,11 +22,12 @@ cd ~/Documents/Projects/job_finder && streamlit run app.py
 ### Core backend
 | File | Role |
 |------|------|
-| `resume_parser.py` | PDF/DOCX text extraction, skill matching, alias resolution |
-| `resume_editor.py` | Bullet scoring, buzzword detection, section analysis |
+| `db.py` | Dual-mode DB layer — PostgreSQL (cloud) or SQLite (local) via DATABASE_URL |
+| `resume_parser.py` | PDF/DOCX extraction with two-column layout detection, skill alias resolution |
+| `resume_editor.py` | Bullet scoring, buzzword detection, section analysis, metric differentiation |
 | `scorer.py` | Semantic job scoring — sentence-transformers + keyword fallback |
-| `tracker.py` | SQLite application pipeline — thread-safe with lock + INSERT OR IGNORE |
-| `claude_ai.py` | All Claude API calls — cover letter, LinkedIn, interview, career intel |
+| `tracker.py` | Application pipeline — thread-safe, dual-backend via db.py |
+| `claude_ai.py` | All Claude API calls — Haiku for speed, Sonnet for quality, streaming |
 | `writing_suite.py` | 23-tool writing suite — Claude-first, template fallback |
 | `ai_tools.py` | ATS scanner, skill gap analysis, interview question generation |
 | `job_fetcher.py` | Multi-source job search — Adzuna, Jobicy, Muse, Remotive, Arbeitnow |
@@ -35,14 +36,18 @@ cd ~/Documents/Projects/job_finder && streamlit run app.py
 | `linkedin_editor.py` | LinkedIn headline/about/DM generation, profile scoring |
 | `salary_intel.py` | Role-based salary estimates with city cost-of-living multipliers |
 | `vector_store.py` | ChromaDB semantic job store |
-| `profile_store.py` | SQLite user profiles + STAR stories persistence |
-| `analytics.py` | Usage event tracking (SQLite) |
-| `auth.py` | bcrypt password hashing, user accounts |
+| `profile_store.py` | User profiles + STAR stories — dual-backend via db.py |
+| `analytics.py` | Usage event tracking — dual-backend via db.py |
+| `auth.py` | bcrypt password hashing, user accounts — dual-backend via db.py |
+| `eval_engine.py` | LLM output quality scoring — grounding, specificity, relevance, tone |
+| `ab_testing.py` | Resume A/B outcome tracking with response rate correlation |
+| `company_research.py` | Agentic company intel — news, funding, HN, tech stack, hiring velocity |
+| `mcp_server.py` | MCP server — 7 tools for Claude Desktop / Cursor integration |
 | `career_level.py` | Career level detection (entry/mid/senior/executive) |
 | `pdf_export.py` | Resume report + writing output PDF generation |
 | `charlotte_jobs.py` | Charlotte-specific job sources |
 | `job_alerts.py` | ntfy push notification system |
-| `background_scanner.py` | Scheduled job scanner daemon |
+| `background_scanner.py` | Scheduled job scanner daemon — cloud-aware, no-op notifications on cloud |
 | `utils.py` | CSS injection, shared HTML helpers, xe() XSS escaping |
 
 ### Pages (pages/)
@@ -58,6 +63,8 @@ cd ~/Documents/Projects/job_finder && streamlit run app.py
 | `8_Profile.py` | My Profile — preferences, scanner config, job alerts |
 | `9_Apply.py` | Apply Package — ATS scan + cover letter + thank-you bundle |
 | `10_Stats.py` | Analytics — usage stats, scanner history, pipeline overview |
+| `11_Company.py` | Company Research — agentic Claude Sonnet dossier |
+| `12_AutoApply.py` | Auto Apply — Playwright Easy Apply agent (desktop only) |
 
 ### Tests (tests/)
 - 92 passing tests (non-slow suite)
@@ -65,14 +72,16 @@ cd ~/Documents/Projects/job_finder && streamlit run app.py
 
 ## Key files
 - `.env` — API keys (ANTHROPIC_API_KEY, FRED_KEY, GITHUB_TOKEN, etc.)
-- `applications.db` — application pipeline SQLite
-- `users.db` — user accounts SQLite
-- `analytics.db` — usage event tracking SQLite
+- `db.py` — dual-mode database layer; set DATABASE_URL for PostgreSQL, omit for SQLite
+- `applications.db` — application pipeline (SQLite, local only)
+- `users.db` — user accounts (SQLite, local only)
+- `analytics.db` — usage event tracking (SQLite, local only)
 - `requirements.txt` — Python dependencies
 - `Makefile` — `make run`, `make test`, `make lint`
 
 ## API keys (all in .env)
 - `ANTHROPIC_API_KEY` — required for all AI features
+- `DATABASE_URL` — PostgreSQL connection string for cloud deployment (omit to use SQLite locally)
 - `FRED_KEY` — FRED economic data (Market page)
 - `GITHUB_TOKEN` — GitHub trending (optional, raises rate limit)
 - `ADZUNA_APP_ID` / `ADZUNA_APP_KEY` — live job listings (optional)

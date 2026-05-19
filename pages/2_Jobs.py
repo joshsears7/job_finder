@@ -48,7 +48,7 @@ def _pay_transparency_violation(location: str, has_salary: bool) -> bool:
 
 
 _STOP_WORDS = frozenset({"and","the","for","with","this","that","are","you","have",
-                          "will","our","from","about","into","your","this","their"})
+                          "will","our","from","about","into","your","their"})
 
 
 def _title_gap(job_title: str, resume_lower: str) -> str:

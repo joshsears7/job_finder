@@ -373,11 +373,18 @@ _WEAK_VERB_STARTS = frozenset({
     "worked with", "supported with",
 })
 
+# Matches concrete quantified results (numbers, percentages, dollars)
 _METRIC_RE = re.compile(
-    r"\d+\s*%"                          # percentages
-    r"|\$\s*[\d,]+"                     # dollar amounts
-    r"|\b\d+[km]?\b"                    # bare numbers
-    r"|increased|decreased|reduced|grew|doubled|tripled|cut|saved|generated",
+    r"\d+\s*%"          # percentages: 18%, 3.2%
+    r"|\$\s*[\d,]+"     # dollar amounts: $1.2M, $500
+    r"|\b\d+[km]?\b",   # bare numbers: 12, 50k, 3m
+    re.IGNORECASE,
+)
+
+# Directional verbs that imply improvement but without a number (partial credit only)
+_DIRECTIONAL_RE = re.compile(
+    r"\b(increased|decreased|reduced|improved|grew|doubled|tripled|cut|saved|generated|"
+    r"accelerated|boosted|expanded|lowered|eliminated|optimized)\b",
     re.IGNORECASE,
 )
 
@@ -419,9 +426,12 @@ def _score_bullet(text: str) -> dict:
             score -= 5
             issues.append("Lead with a strong action verb (Delivered, Analyzed, Managed…)")
 
-    # +20 for having a metric / quantified result
+    # +20 for a real number/$ metric; +8 for directional verb only (improvement implied but unquantified)
     if _METRIC_RE.search(cleaned):
         score += 20
+    elif _DIRECTIONAL_RE.search(cleaned):
+        score += 8
+        issues.append("Good direction — add a number to make it concrete (e.g. 'Reduced errors by 30%')")
     else:
         score -= 10
         issues.append("Add a quantified result — numbers make bullets 40% more memorable to recruiters")

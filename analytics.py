@@ -74,6 +74,7 @@ def _bump_daily(conn, event: str):
     col = col_map.get(event)
     if not col:
         return
+    assert col in {"resumes", "jobs_searched", "cover_letters", "applications", "active_users"}
     conn.execute(f"""
         INSERT INTO daily_stats (date, {col}) VALUES ({db.P}, 1)
         ON CONFLICT(date) DO UPDATE SET {col} = {col} + 1

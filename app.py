@@ -578,7 +578,7 @@ def _dashboard_impl():
                     st.markdown("<div class='section-tag' style='margin-top:8px'>Missing Sections</div>", unsafe_allow_html=True)
                     for sec in analysis["missing_sections"]:
                         tip = analysis["missing_tips"].get(sec, "")
-                        st.markdown(alert(f"<b>No {sec} section</b> — {tip}", "red"), unsafe_allow_html=True)
+                        st.markdown(alert(f"<b>No {xe(sec)} section</b> — {xe(tip)}", "red"), unsafe_allow_html=True)
 
                 # ── Score explanation ──────────────────────────────
                 _expl = analysis.get("score_explanation", {})

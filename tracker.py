@@ -154,10 +154,11 @@ def update_status(app_id, status, notes=None):
 
 
 def delete_app(app_id):
-    conn = _connect()
-    conn.execute(f"DELETE FROM applications WHERE id={db.P}", (app_id,))
-    conn.commit()
-    conn.close()
+    with _db_lock:
+        conn = _connect()
+        conn.execute(f"DELETE FROM applications WHERE id={db.P}", (app_id,))
+        conn.commit()
+        conn.close()
 
 
 def is_saved(job_id):
@@ -217,20 +218,21 @@ def _migrate_vault_from_json():
 
 def save_vault_version(name: str, text: str, score: int, date_saved: str = None):
     """Upsert a resume version by name."""
-    conn = _connect()
-    conn.execute(
-        f"""
-        INSERT INTO resume_versions (name, text, score, date_saved)
-        VALUES ({db.P},{db.P},{db.P},{db.P})
-        ON CONFLICT(name) DO UPDATE SET
-            text       = excluded.text,
-            score      = excluded.score,
-            date_saved = excluded.date_saved
-        """,
-        (name, text, score, date_saved or datetime.now().isoformat()[:10]),
-    )
-    conn.commit()
-    conn.close()
+    with _db_lock:
+        conn = _connect()
+        conn.execute(
+            f"""
+            INSERT INTO resume_versions (name, text, score, date_saved)
+            VALUES ({db.P},{db.P},{db.P},{db.P})
+            ON CONFLICT(name) DO UPDATE SET
+                text       = excluded.text,
+                score      = excluded.score,
+                date_saved = excluded.date_saved
+            """,
+            (name, text, score, date_saved or datetime.now().isoformat()[:10]),
+        )
+        conn.commit()
+        conn.close()
 
 
 def get_vault() -> dict:
@@ -244,10 +246,11 @@ def get_vault() -> dict:
 
 
 def delete_vault_version(name: str):
-    conn = _connect()
-    conn.execute(f"DELETE FROM resume_versions WHERE name={db.P}", (name,))
-    conn.commit()
-    conn.close()
+    with _db_lock:
+        conn = _connect()
+        conn.execute(f"DELETE FROM resume_versions WHERE name={db.P}", (name,))
+        conn.commit()
+        conn.close()
 
 
 _init_resume_vault()
@@ -285,15 +288,16 @@ _init_contacts()
 
 def save_contact(name, company="", role="", how_met="", email="",
                  linkedin="", status="warm", next_action="", notes=""):
-    conn = _connect()
-    conn.execute(f"""
-        INSERT INTO contacts
-            (name, company, role, how_met, email, linkedin, status, next_action, notes, date_added)
-        VALUES ({db.P},{db.P},{db.P},{db.P},{db.P},{db.P},{db.P},{db.P},{db.P},{db.P})
-    """, (name, company, role, how_met, email, linkedin, status,
-          next_action, notes, datetime.now().isoformat()[:10]))
-    conn.commit()
-    conn.close()
+    with _db_lock:
+        conn = _connect()
+        conn.execute(f"""
+            INSERT INTO contacts
+                (name, company, role, how_met, email, linkedin, status, next_action, notes, date_added)
+            VALUES ({db.P},{db.P},{db.P},{db.P},{db.P},{db.P},{db.P},{db.P},{db.P},{db.P})
+        """, (name, company, role, how_met, email, linkedin, status,
+              next_action, notes, datetime.now().isoformat()[:10]))
+        conn.commit()
+        conn.close()
 
 
 def get_contacts():
@@ -326,10 +330,11 @@ def update_contact(contact_id, **kwargs):
 
 
 def delete_contact(contact_id):
-    conn = _connect()
-    conn.execute(f"DELETE FROM contacts WHERE id={db.P}", (contact_id,))
-    conn.commit()
-    conn.close()
+    with _db_lock:
+        conn = _connect()
+        conn.execute(f"DELETE FROM contacts WHERE id={db.P}", (contact_id,))
+        conn.commit()
+        conn.close()
 
 
 # ── Follow-up Schedule ─────────────────────────────────────────────
@@ -364,32 +369,35 @@ def get_all_followups(user_id: int = 1) -> list:
 
 
 def complete_followup(followup_id: int):
-    conn = _connect()
-    conn.execute(
-        f"UPDATE followup_schedule SET status='sent', completed_at={db.P} WHERE id={db.P}",
-        (datetime.now().isoformat(), followup_id),
-    )
-    conn.commit()
-    conn.close()
+    with _db_lock:
+        conn = _connect()
+        conn.execute(
+            f"UPDATE followup_schedule SET status='sent', completed_at={db.P} WHERE id={db.P}",
+            (datetime.now().isoformat(), followup_id),
+        )
+        conn.commit()
+        conn.close()
 
 
 def skip_followup(followup_id: int):
-    conn = _connect()
-    conn.execute(
-        f"UPDATE followup_schedule SET status='skipped', completed_at={db.P} WHERE id={db.P}",
-        (datetime.now().isoformat(), followup_id),
-    )
-    conn.commit()
-    conn.close()
+    with _db_lock:
+        conn = _connect()
+        conn.execute(
+            f"UPDATE followup_schedule SET status='skipped', completed_at={db.P} WHERE id={db.P}",
+            (datetime.now().isoformat(), followup_id),
+        )
+        conn.commit()
+        conn.close()
 
 
 def save_followup_draft(followup_id: int, draft: str):
-    conn = _connect()
-    conn.execute(
-        f"UPDATE followup_schedule SET draft_text={db.P} WHERE id={db.P}", (draft, followup_id)
-    )
-    conn.commit()
-    conn.close()
+    with _db_lock:
+        conn = _connect()
+        conn.execute(
+            f"UPDATE followup_schedule SET draft_text={db.P} WHERE id={db.P}", (draft, followup_id)
+        )
+        conn.commit()
+        conn.close()
 
 
 # ── Job Search Health Score ────────────────────────────────────────
@@ -435,16 +443,17 @@ def get_health_score(user_id: int = 1) -> dict:
 
 def log_scanner_run(jobs_found=0, jobs_saved=0, jobs_notified=0,
                     cities="", roles="", duration=0.0, user_id=1):
-    conn = _connect()
-    conn.execute(f"""
-        INSERT INTO scanner_runs
-            (user_id, run_at, jobs_found, jobs_saved, jobs_notified,
-             cities_scanned, roles_scanned, duration_secs)
-        VALUES ({db.P},{db.P},{db.P},{db.P},{db.P},{db.P},{db.P},{db.P})
-    """, (user_id, datetime.now().isoformat(), jobs_found, jobs_saved,
-          jobs_notified, cities, roles, duration))
-    conn.commit()
-    conn.close()
+    with _db_lock:
+        conn = _connect()
+        conn.execute(f"""
+            INSERT INTO scanner_runs
+                (user_id, run_at, jobs_found, jobs_saved, jobs_notified,
+                 cities_scanned, roles_scanned, duration_secs)
+            VALUES ({db.P},{db.P},{db.P},{db.P},{db.P},{db.P},{db.P},{db.P})
+        """, (user_id, datetime.now().isoformat(), jobs_found, jobs_saved,
+              jobs_notified, cities, roles, duration))
+        conn.commit()
+        conn.close()
 
 
 def get_scanner_runs(limit=10, user_id=1) -> list:

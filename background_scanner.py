@@ -44,9 +44,10 @@ def send_notification(title: str, message: str, subtitle: str = ""):
     if sys.platform != "darwin" or _IS_CLOUD:
         return
     try:
+        _clean = lambda s: s.replace('"', "'").replace("\n", " ").replace("\r", "")
         script = (
-            f'display notification "{message}" with title "{title}"'
-            + (f' subtitle "{subtitle}"' if subtitle else "")
+            f'display notification "{_clean(message)}" with title "{_clean(title)}"'
+            + (f' subtitle "{_clean(subtitle)}"' if subtitle else "")
         )
         subprocess.run(["osascript", "-e", script], timeout=5, capture_output=True)
     except Exception:

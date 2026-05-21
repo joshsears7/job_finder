@@ -330,7 +330,7 @@ def _generate_with_claude(prompt_type: str, profile: dict, job: dict | None, ext
         if jd:
             job_ctx += f"\n\nJob Description (excerpt):\n{jd}"
         if extra_context and extra_context.strip():
-            job_ctx += f"\n\nAdditional context from user: {extra_context.strip()}"
+            job_ctx += f"\n\nAdditional context from user: {_sanitize(extra_context, 800)}"
 
         # Per-category length and style guidance
         length_guide = {

@@ -4,11 +4,15 @@ api.py — CareerIQ REST API
 FastAPI layer exposing resume scoring, job matching, and analytics.
 Run standalone: uvicorn api:app --host 0.0.0.0 --port 8000 --reload
 """
-from fastapi import FastAPI, HTTPException, Depends, Header
+from fastapi import FastAPI, HTTPException, Depends, Header, Request
 from fastapi.middleware.cors import CORSMiddleware
+from fastapi.responses import PlainTextResponse
 from pydantic import BaseModel
 from typing import Optional
 import os
+import time
+import threading
+from collections import defaultdict
 
 import analytics
 import tracker
@@ -22,7 +26,7 @@ app = FastAPI(
     version="1.0.0",
 )
 
-_DEFAULT_ORIGINS = "http://localhost:8501,https://*.hf.space,https://*.up.railway.app"
+_DEFAULT_ORIGINS = "http://localhost:8501,https://*.hf.space,https://*.up.railway.app,https://*.streamlit.app"
 _ALLOWED_ORIGINS = [o.strip() for o in os.getenv("CORS_ORIGINS", _DEFAULT_ORIGINS).split(",") if o.strip()]
 app.add_middleware(
     CORSMiddleware,
@@ -32,6 +36,24 @@ app.add_middleware(
 )
 
 _API_KEY = os.getenv("CAREERIQ_API_KEY", "")
+
+# ── Rate limiter (60 req/min per IP) ─────────────────────────────
+_rl_lock   = threading.Lock()
+_rl_counts: dict = defaultdict(lambda: [0, 0.0])  # ip -> [count, window_start]
+_RL_LIMIT  = int(os.getenv("RATE_LIMIT_RPM", "60"))
+_RL_WINDOW = 60.0
+
+def _rate_limit(request: Request):
+    ip  = request.client.host if request.client else "unknown"
+    now = time.monotonic()
+    with _rl_lock:
+        count, window_start = _rl_counts[ip]
+        if now - window_start >= _RL_WINDOW:
+            _rl_counts[ip] = [1, now]
+        else:
+            if count >= _RL_LIMIT:
+                raise HTTPException(status_code=429, detail="Rate limit exceeded — 60 requests per minute")
+            _rl_counts[ip][0] += 1
 
 
 def _check_key(x_api_key: str = Header(default="")):
@@ -83,14 +105,14 @@ def health():
 # ── Auth ──────────────────────────────────────────────────────────
 
 @app.post("/auth/register")
-def register(req: RegisterRequest):
+def register(req: RegisterRequest, _rl=Depends(_rate_limit)):
     result = _auth.register(req.email, req.name, req.password)
     if not result["ok"]:
         raise HTTPException(status_code=400, detail=result["error"])
     return {"user_id": result["user_id"], "name": req.name}
 
 @app.post("/auth/login")
-def login(req: LoginRequest):
+def login(req: LoginRequest, _rl=Depends(_rate_limit)):
     result = _auth.login(req.email, req.password)
     if not result["ok"]:
         raise HTTPException(status_code=401, detail=result["error"])

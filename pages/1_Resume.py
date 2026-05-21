@@ -165,6 +165,21 @@ with tab_edit:
                         st.session_state.pop("active_resume_version", None)
                     st.rerun()
 
+            # Score progression chart
+            _scored_versions = [
+                (_vn, _vd.get("score", 0), _vd.get("saved", ""))
+                for _vn, _vd in vault.items()
+                if _vd.get("score", 0) > 0
+            ]
+            if len(_scored_versions) >= 2:
+                import pandas as _pd
+                _chart_df = _pd.DataFrame(
+                    [(s, n) for n, s, _ in _scored_versions],
+                    columns=["Score", "Version"],
+                )
+                st.markdown("<div style='margin-top:12px;font-size:12px;font-weight:600;color:#475569'>Score Progression</div>", unsafe_allow_html=True)
+                st.line_chart(_chart_df.set_index("Version"), height=160)
+
 # ── Analysis tab ──
 with tab_analyze:
     overall = analysis["overall_score"]

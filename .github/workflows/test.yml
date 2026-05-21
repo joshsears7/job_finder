@@ -24,7 +24,7 @@ jobs:
         run: |
           pip install --upgrade pip
           pip install pytest pytest-cov
-          pip install pdfplumber python-docx difflib2 python-dotenv requests
+          pip install pdfplumber python-docx python-dotenv requests
           pip install -r requirements.txt
 
       - name: Run fast tests (no model)

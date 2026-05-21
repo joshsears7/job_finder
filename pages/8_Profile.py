@@ -177,7 +177,7 @@ with tab_scanner:
 
 # ── Job Alerts ─────────────────────────────────────────────────────
 with tab_alerts:
-    from job_alerts import load_config as _al_load, save_config as _al_save, add_alert, remove_alert, set_ntfy_topic, test_ntfy
+    from job_alerts import load_config as _al_load, save_config as _al_save, add_alert, remove_alert, set_ntfy_topic, test_ntfy, set_alert_email, test_email
     from job_fetcher import CITY_PRESETS
 
     st.markdown("<div class='section-tag'>Push Notifications (ntfy)</div>", unsafe_allow_html=True)
@@ -214,6 +214,33 @@ with tab_alerts:
         "No account, no login — just pick a unique topic name."
         "</div>", unsafe_allow_html=True
     )
+
+    st.markdown("<div class='section-tag' style='margin-top:16px'>Email Alerts</div>", unsafe_allow_html=True)
+    st.caption("Get an email when a high-match job is found. Requires a free SendGrid API key (sendgrid.com) set as SENDGRID_API_KEY in your environment.")
+
+    import os as _os
+    _has_sg = bool(_os.getenv("SENDGRID_API_KEY", ""))
+    c_email1, c_email2 = st.columns([3, 1])
+    _alert_email = c_email1.text_input(
+        "Email to notify",
+        value=al_cfg.get("alert_email", ""),
+        placeholder="you@email.com",
+        key="al_email_input",
+        disabled=not _has_sg,
+    )
+    if not _has_sg:
+        st.caption("Add SENDGRID_API_KEY to your secrets to enable email alerts.")
+    if _has_sg and c_email2.button("Test Email", key="al_email_test", use_container_width=True):
+        if _alert_email.strip():
+            set_alert_email(_alert_email.strip())
+            ok = test_email(_alert_email.strip())
+            st.success("Test email sent — check your inbox.") if ok else st.error("Send failed — verify your SENDGRID_API_KEY and email address.")
+        else:
+            st.error("Enter an email address first.")
+    if _has_sg and _alert_email.strip() != al_cfg.get("alert_email", ""):
+        if st.button("Save Email", key="al_save_email"):
+            set_alert_email(_alert_email.strip())
+            st.success("Email saved.")
 
     st.markdown("---")
     st.markdown("<div class='section-tag'>Alert Configurations</div>", unsafe_allow_html=True)

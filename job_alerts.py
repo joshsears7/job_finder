@@ -13,8 +13,11 @@ Manual run:
 
 import json
 import os
+import smtplib
 import requests
 from datetime import datetime
+from email.mime.text import MIMEText
+from email.mime.multipart import MIMEMultipart
 
 CONFIG_FILE = os.path.join(os.path.dirname(os.path.abspath(__file__)), "job_alerts_config.json")
 
@@ -67,6 +70,42 @@ def set_resume_text(text: str):
     save_config(config)
 
 
+def set_alert_email(email: str):
+    config = load_config()
+    config["alert_email"] = email
+    save_config(config)
+
+
+# ── Email sender (SendGrid SMTP or any SMTP provider) ─────────────
+
+def send_email(to_addr: str, subject: str, body_html: str) -> bool:
+    api_key = os.getenv("SENDGRID_API_KEY", "")
+    if not api_key or not to_addr:
+        return False
+    try:
+        msg = MIMEMultipart("alternative")
+        msg["Subject"] = subject
+        msg["From"]    = "CareerIQ Alerts <alerts@careerriq.app>"
+        msg["To"]      = to_addr
+        msg.attach(MIMEText(body_html, "html"))
+
+        with smtplib.SMTP("smtp.sendgrid.net", 587, timeout=10) as server:
+            server.starttls()
+            server.login("apikey", api_key)
+            server.sendmail(msg["From"], [to_addr], msg.as_string())
+        return True
+    except Exception:
+        return False
+
+
+def test_email(to_addr: str) -> bool:
+    return send_email(
+        to_addr,
+        "CareerIQ Alerts — Connected!",
+        "<h2>Job alerts are live.</h2><p>You'll receive an email when new matching jobs appear above your fit score threshold.</p>",
+    )
+
+
 # ── ntfy sender ───────────────────────────────────────────────────
 
 def send_ntfy(topic: str, title: str, body: str, url: str = "") -> bool:
@@ -113,6 +152,7 @@ def run_alerts() -> dict:
 
     config = load_config()
     topic       = config.get("ntfy_topic", "")
+    alert_email = config.get("alert_email", "") or os.getenv("ALERT_EMAIL", "")
     resume_text = config.get("resume_text", "")
     alerts      = config.get("alerts", [])
     seen_ids    = set(config.get("seen_ids", []))
@@ -150,8 +190,23 @@ def run_alerts() -> dict:
                     f"📊 Fit: {score}%  ·  {j['source']}{sal}\n"
                     f"{j.get('description','')[:120]}…"
                 )
-                ok = send_ntfy(topic, f"New: {j['title']} @ {j['company']}", body, j.get("url",""))
-                if ok:
+                notified = False
+                if topic:
+                    notified = send_ntfy(topic, f"New: {j['title']} @ {j['company']}", body, j.get("url",""))
+                if alert_email:
+                    job_url = j.get("url", "")
+                    html = (
+                        f"<h2 style='color:#2563eb'>{j['title']} @ {j['company']}</h2>"
+                        f"<p><b>Location:</b> {j['location']} &nbsp;|&nbsp; "
+                        f"<b>Fit Score:</b> {score}% &nbsp;|&nbsp; "
+                        f"<b>Source:</b> {j['source']}</p>"
+                        + (f"<p><b>Salary:</b> ${int(j['salary_min']):,}–${int(j['salary_max']):,}</p>" if j.get("salary_min") and j.get("salary_max") else "")
+                        + f"<p>{j.get('description','')[:300]}…</p>"
+                        + (f"<p><a href='{job_url}'>View Job →</a></p>" if job_url else "")
+                    )
+                    email_ok = send_email(alert_email, f"CareerIQ: {j['title']} @ {j['company']} ({score}% match)", html)
+                    notified = notified or email_ok
+                if notified:
                     sent += 1
 
     # Persist seen IDs (keep last 3000)

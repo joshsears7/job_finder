@@ -11,7 +11,7 @@
 
 ## Live Demo
 
-> Live deployment coming soon. Clone the repo and run locally in under 2 minutes — see Setup below.
+**[mycareeriq.streamlit.app](https://mycareeriq.streamlit.app)** — click Try Live Demo to explore without an account.
 
 ---
 
@@ -175,10 +175,9 @@ The test suite covers the scoring engine, tracker CRUD, job fetcher, and salary 
 
 ## Deployment
 
-The repo ships with `railway.toml` and `nixpacks.toml` for one-command Railway deployment:
+Deployed on **Streamlit Community Cloud** (free, no expiry) with **Neon PostgreSQL** for persistent storage.
 
-```bash
-railway up
-```
-
-The nixpacks build pre-downloads the sentence-transformers model at build time so cold starts are fast.
+To deploy your own instance:
+1. Fork the repo
+2. Go to [share.streamlit.io](https://share.streamlit.io) → Deploy from GitHub → select your fork → main file: `app.py`
+3. Add secrets: `ANTHROPIC_API_KEY` and `DATABASE_URL` (PostgreSQL connection string)

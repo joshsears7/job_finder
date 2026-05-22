@@ -25,7 +25,7 @@ from scorer import score_job, get_skill_gaps, get_model
 from resume_editor import full_analysis
 import tracker
 from utils import (
-    inject_css, alert, chip, score_badge, score_color, progress_bar,
+    inject_css, alert, chip, score_badge, score_ring, score_color, progress_bar,
     STATUS_EMOJI, STATUS_COLOR, _todays_tasks, load_demo_resume, xe,
 )
 
@@ -375,18 +375,33 @@ def _dashboard_impl():
     profile = st.session_state.get("resume")
 
     if not profile:
+        # ── Live platform stats ───────────────────────────────────────
+        try:
+            _live = _analytics.get_stats()
+        except Exception:
+            _live = {}
+        _n_resumes = _live.get("resumes", 0)
+        _n_cls     = _live.get("cover_letters", 0)
+        _n_jobs    = _live.get("jobs_searched", 0)
+        _n_apps    = _live.get("applications", 0)
+
+        def _fmt(n):
+            return f"{n:,}" if n < 10000 else f"{n // 1000}k+"
+
         # ── Hero ──
-        st.markdown("""
+        st.markdown(f"""
 <div class='hero-section'>
-  <div class='hero-badge'>100% Free · No Account Required · No Paywalls</div>
-  <div class='hero-title'>The smartest free career tool<br><span>for your job search.</span></div>
-  <div class='hero-sub'>Resume scoring &amp; editing · Job matching across 26 cities · AI writing suite · Application tracking — everything in one place.</div>
+  <div class='hero-badge'>100% Free · No Sign-Up Required · No Paywalls</div>
+  <div class='hero-title'>Your AI-powered<br><span>career command center.</span></div>
+  <div class='hero-sub'>Resume scoring · Semantic job matching · AI writing suite ·
+  Auto Apply · Company intelligence · Interview prep — everything in one place,
+  free forever.</div>
   <div class='stat-row'>
-    <span class='stat-pill'><strong>26</strong> cities</span>
-    <span class='stat-pill'><strong>3</strong> job sources</span>
-    <span class='stat-pill'><strong>23</strong> writing tools</span>
+    <span class='stat-pill'><strong>{_fmt(_n_resumes) if _n_resumes else "∞"}</strong> resumes scored</span>
+    <span class='stat-pill'><strong>{_fmt(_n_cls) if _n_cls else "23"}</strong> cover letters</span>
+    <span class='stat-pill'><strong>{_fmt(_n_jobs) if _n_jobs else "26"}</strong> job searches</span>
+    <span class='stat-pill'><strong>Claude Sonnet</strong> powered</span>
     <span class='stat-pill'><strong>0</strong> paywalls</span>
-    <span class='stat-pill'><strong>AI-powered</strong></span>
   </div>
 </div>
 """, unsafe_allow_html=True)
@@ -485,22 +500,87 @@ def _dashboard_impl():
 </div>
 """, unsafe_allow_html=True)
 
+        # ── Core features ──────────────────────────────────────────────
         st.markdown("---")
+        st.markdown("<div class='section-tag'>What you get</div>", unsafe_allow_html=True)
         f1, f2, f3, f4 = st.columns(4)
         for col, icon, title, desc in [
-            (f1, "📊", "Resume Analyzer", "Score, section breakdown, bullet coach, ATS scanner, and specific rewrites"),
-            (f2, "🔍", "Job Matching", "Semantic AI scoring against live jobs across 26 cities in real-time"),
-            (f3, "✍️", "Writing Suite", "23 tools: cover letters, essays, emails, LinkedIn — tailored to you and the job"),
-            (f4, "📋", "App Tracker", "Pipeline dashboard from saved → applied → interview → offer"),
+            (f1, "📊", "Resume Analyzer", "Instant score, section breakdown, bullet coaching, ATS keyword scan, and specific rewrites powered by AI"),
+            (f2, "🔍", "Semantic Job Match", "AI scores every live job against your resume on meaning — not just keywords. Sorted by real fit."),
+            (f3, "✍️", "23-Tool Writing Suite", "Cover letters, cold emails, LinkedIn messages, thank-you notes, essays — all tailored to you and the specific job"),
+            (f4, "📋", "Application Tracker", "Full pipeline dashboard: saved → applied → interview → offer. Follow-up reminders, contacts, A/B resume testing"),
         ]:
-            col.markdown(f"<div class='card' style='text-align:center'><div style='font-size:1.9rem;margin-bottom:10px'>{icon}</div><div style='font-weight:700;font-size:14px;margin-bottom:6px'>{title}</div><div style='color:#64748b;font-size:12.5px;line-height:1.5'>{desc}</div></div>", unsafe_allow_html=True)
+            col.markdown(
+                f"<div class='card' style='text-align:center;height:100%'>"
+                f"<div style='font-size:1.9rem;margin-bottom:10px'>{icon}</div>"
+                f"<div style='font-weight:700;font-size:14px;margin-bottom:6px'>{title}</div>"
+                f"<div style='color:#64748b;font-size:12.5px;line-height:1.55'>{desc}</div>"
+                f"</div>", unsafe_allow_html=True
+            )
 
+        # ── Unique differentiators ─────────────────────────────────────
         st.markdown("<br>", unsafe_allow_html=True)
+        st.markdown("<div class='section-tag'>What makes CareerIQ different</div>", unsafe_allow_html=True)
+        st.markdown("""
+<div style='display:grid;grid-template-columns:repeat(5,1fr);gap:12px;margin-bottom:8px'>
+  <div class='card-slate' style='text-align:center;padding:20px 14px'>
+    <div style='font-size:1.6rem;margin-bottom:8px'>🤖</div>
+    <div style='font-weight:700;font-size:13px;color:#e2e8f0;margin-bottom:6px'>Auto Apply</div>
+    <div style='font-size:12px;color:#475569;line-height:1.5'>Opens a real browser, finds LinkedIn Easy Apply jobs, fills every form — with your approval at each step</div>
+  </div>
+  <div class='card-slate' style='text-align:center;padding:20px 14px'>
+    <div style='font-size:1.6rem;margin-bottom:8px'>🧠</div>
+    <div style='font-weight:700;font-size:13px;color:#e2e8f0;margin-bottom:6px'>Company Intel Agent</div>
+    <div style='font-size:12px;color:#475569;line-height:1.5'>Multi-source research: funding, tech stack, HackerNews signals, news, and hiring velocity — synthesized by Claude Sonnet</div>
+  </div>
+  <div class='card-slate' style='text-align:center;padding:20px 14px'>
+    <div style='font-size:1.6rem;margin-bottom:8px'>🧪</div>
+    <div style='font-weight:700;font-size:13px;color:#e2e8f0;margin-bottom:6px'>A/B Resume Testing</div>
+    <div style='font-size:12px;color:#475569;line-height:1.5'>Track multiple resume versions against real application outcomes to find which one actually gets interviews</div>
+  </div>
+  <div class='card-slate' style='text-align:center;padding:20px 14px'>
+    <div style='font-size:1.6rem;margin-bottom:8px'>🚩</div>
+    <div style='font-weight:700;font-size:13px;color:#e2e8f0;margin-bottom:6px'>Red Flag Detector</div>
+    <div style='font-size:12px;color:#475569;line-height:1.5'>Warns you about rockstar culture, "unlimited PTO" traps, pay transparency violations, and hidden warning signs in job listings</div>
+  </div>
+  <div class='card-slate' style='text-align:center;padding:20px 14px'>
+    <div style='font-size:1.6rem;margin-bottom:8px'>📈</div>
+    <div style='font-weight:700;font-size:13px;color:#e2e8f0;margin-bottom:6px'>Market Intelligence</div>
+    <div style='font-size:12px;color:#475569;line-height:1.5'>FRED macro data, BLS job projections, HackerNews hiring signals, GitHub trending skills — real market context</div>
+  </div>
+</div>
+""", unsafe_allow_html=True)
+
+        # ── Tech stack (for portfolio viewers) ────────────────────────
+        st.markdown("""
+<div style='background:#060c1a;border:1px solid #1a2340;border-radius:12px;
+            padding:16px 24px;margin:8px 0 4px;text-align:center'>
+  <div style='font-size:10px;font-weight:700;letter-spacing:.1em;text-transform:uppercase;
+              color:#334155;margin-bottom:10px'>Built with</div>
+  <div style='display:flex;justify-content:center;gap:10px;flex-wrap:wrap'>
+    <span style='background:#1e1b4b;color:#a5b4fc;border:1px solid #312e81;
+                 border-radius:6px;padding:4px 12px;font-size:11.5px;font-weight:600'>Claude API</span>
+    <span style='background:#052e16;color:#86efac;border:1px solid #14532d;
+                 border-radius:6px;padding:4px 12px;font-size:11.5px;font-weight:600'>sentence-transformers</span>
+    <span style='background:#0c1f5c;color:#93c5fd;border:1px solid #1e3a8a;
+                 border-radius:6px;padding:4px 12px;font-size:11.5px;font-weight:600'>ChromaDB</span>
+    <span style='background:#180e00;color:#fde68a;border:1px solid #78350f;
+                 border-radius:6px;padding:4px 12px;font-size:11.5px;font-weight:600'>PostgreSQL</span>
+    <span style='background:#150404;color:#fecaca;border:1px solid #7f1d1d;
+                 border-radius:6px;padding:4px 12px;font-size:11.5px;font-weight:600'>Playwright</span>
+    <span style='background:#0d1424;color:#cbd5e1;border:1px solid #1a2847;
+                 border-radius:6px;padding:4px 12px;font-size:11.5px;font-weight:600'>FastAPI</span>
+    <span style='background:#0d1424;color:#cbd5e1;border:1px solid #1a2847;
+                 border-radius:6px;padding:4px 12px;font-size:11.5px;font-weight:600'>Streamlit</span>
+  </div>
+</div>
+""", unsafe_allow_html=True)
+
         st.markdown(
-            "<div style='text-align:center;color:#94a3b8;font-size:12px'>"
-            "🔒 Resume scoring runs on-server — your data never leaves CareerIQ &nbsp;·&nbsp; "
-            "📡 Live data from FRED, BLS, Adzuna, Jobicy &nbsp;·&nbsp; "
-            "🤖 Semantic matching via sentence-transformers · Writing tools powered by Claude"
+            "<div style='text-align:center;color:#334155;font-size:11.5px;margin-top:10px'>"
+            "🔒 Your resume never leaves the server &nbsp;·&nbsp; "
+            "📡 Live jobs from Adzuna, Jobicy, Remotive, The Muse &nbsp;·&nbsp; "
+            "🤖 Prompt caching enabled for 90%+ cost reduction"
             "</div>", unsafe_allow_html=True
         )
 
@@ -531,10 +611,10 @@ def _dashboard_impl():
         with dash_tab1:
             c1, c2, c3, c4 = st.columns(4)
             c1.markdown(
-                f"<div class='card' style='text-align:center'>"
-                f"<div style='font-size:11px;font-weight:700;text-transform:uppercase;color:#64748b;letter-spacing:.05em'>Resume Score</div>"
-                f"<div style='margin-top:8px'>{score_badge(analysis['overall_score'], 60)}</div>"
-                f"<div style='font-size:24px;font-weight:800;margin-top:6px;color:#f1f5f9'>{analysis['grade']}</div>"
+                f"<div class='card' style='text-align:center;padding-bottom:20px'>"
+                f"<div style='font-size:11px;font-weight:700;text-transform:uppercase;color:#64748b;"
+                f"letter-spacing:.05em;margin-bottom:12px'>Resume Score</div>"
+                f"{score_ring(analysis['overall_score'], size=110)}"
                 f"</div>", unsafe_allow_html=True
             )
             c2.markdown(

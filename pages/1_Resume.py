@@ -7,7 +7,7 @@ from dotenv import load_dotenv
 load_dotenv()
 
 from utils import (
-    inject_css, alert, chip, score_badge, score_color, progress_bar,
+    inject_css, alert, chip, score_badge, score_ring, score_color, progress_bar,
     _load_vault, _save_vault, RESUME_EXAMPLES, EXAMPLE_TIPS,
 )
 from resume_parser import parse_resume
@@ -187,10 +187,8 @@ with tab_analyze:
     col_score, col_breakdown = st.columns([1, 3])
     with col_score:
         st.markdown(
-            f"<div style='text-align:center;padding:20px 0'>"
-            f"{score_badge(overall, 80)}"
-            f"<div style='font-size:32px;font-weight:800;margin-top:8px'>{analysis['grade']}</div>"
-            f"<div style='color:#64748b;font-size:13px'>Overall Score</div>"
+            f"<div style='text-align:center;padding:16px 0'>"
+            f"{score_ring(overall, size=130)}"
             f"</div>", unsafe_allow_html=True
         )
         if dims:

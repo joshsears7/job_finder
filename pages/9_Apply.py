@@ -2,7 +2,7 @@ import streamlit as st
 from dotenv import load_dotenv
 load_dotenv()
 
-from utils import inject_css, alert, chip, xe
+from utils import inject_css, alert, chip, xe, score_ring
 from ai_tools import generate_cover_letter, ats_scan, generate_interview_questions
 from claude_ai import stream_cover_letter_claude, stream_thankyou_claude
 import tracker
@@ -126,12 +126,14 @@ if pkg_ats:
     with st.expander(f"ATS Scan — Score: {pkg_ats['score']}%", expanded=True):
         verdict_color = {"strong": "#10b981", "medium": "#f59e0b", "weak": "#ef4444"}.get(pkg_ats["verdict"][0], "#64748b")
         st.markdown(
-            f"<div style='display:flex;gap:24px;align-items:center;margin-bottom:16px'>"
-            f"<div style='font-size:42px;font-weight:900;color:{verdict_color}'>{pkg_ats['score']}%</div>"
-            f"<div><div style='font-weight:700;color:{verdict_color}'>{pkg_ats['verdict'][1]}</div>"
-            f"<div style='font-size:12px;color:#64748b;margin-top:4px'>"
-            f"Keyword: {pkg_ats['keyword_score']}% · Semantic: {pkg_ats['semantic_score']}%</div></div>"
-            f"</div>", unsafe_allow_html=True
+            f"<div style='display:flex;gap:28px;align-items:center;margin-bottom:16px'>"
+            f"{score_ring(pkg_ats['score'], size=100, show_grade=False)}"
+            f"<div>"
+            f"<div style='font-weight:800;font-size:17px;color:{verdict_color};margin-bottom:4px'>{xe(pkg_ats['verdict'][1])}</div>"
+            f"<div style='font-size:12.5px;color:#64748b'>"
+            f"Keyword match: <b style='color:#e2e8f0'>{pkg_ats['keyword_score']}%</b> &nbsp;·&nbsp; "
+            f"Semantic match: <b style='color:#e2e8f0'>{pkg_ats['semantic_score']}%</b></div>"
+            f"</div></div>", unsafe_allow_html=True
         )
 
         col_found, col_miss = st.columns(2)

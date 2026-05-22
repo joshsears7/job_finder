@@ -96,6 +96,42 @@ def score_badge(s, size=72):
             f"font-size:{int(size * 0.3)}px'>{s}%</div>")
 
 
+def score_ring(score: int, size: int = 120, show_grade: bool = True) -> str:
+    """Animated SVG score ring — draws itself from 0 to score on every page load."""
+    circumference = 314.159  # 2π × 50
+    clamped = max(0, min(100, score))
+    offset   = circumference * (1 - clamped / 100)
+    color    = "#10b981" if score >= 75 else "#3b82f6" if score >= 60 else "#f59e0b" if score >= 45 else "#ef4444"
+    grade    = "A" if score >= 85 else "B" if score >= 70 else "C" if score >= 55 else "D" if score >= 40 else "F"
+    anim     = f"ciq_ring_{score}_{size}"
+    fs_score = int(size * 0.22)
+    fs_label = int(size * 0.095)
+    fs_grade = int(size * 0.155)
+    grade_html = (
+        f"<div style='font-size:{fs_grade}px;font-weight:800;color:{color};"
+        f"text-align:center;margin-top:5px'>Grade {grade}</div>"
+    ) if show_grade else ""
+    return f"""<div style="display:inline-flex;flex-direction:column;align-items:center">
+  <div style="position:relative;display:inline-flex;align-items:center;justify-content:center;width:{size}px;height:{size}px">
+    <style>
+      @keyframes {anim}{{from{{stroke-dashoffset:{circumference:.2f}}}to{{stroke-dashoffset:{offset:.2f}}}}}
+      .{anim}{{animation:{anim} 1.5s cubic-bezier(.4,0,.2,1) forwards;
+               stroke-dasharray:{circumference:.2f};stroke-dashoffset:{circumference:.2f}}}
+    </style>
+    <svg width="{size}" height="{size}" viewBox="0 0 120 120" style="transform:rotate(-90deg)">
+      <circle cx="60" cy="60" r="50" fill="none" stroke="#1e293b" stroke-width="10"/>
+      <circle class="{anim}" cx="60" cy="60" r="50" fill="none"
+              stroke="{color}" stroke-width="10" stroke-linecap="round"/>
+    </svg>
+    <div style="position:absolute;text-align:center;pointer-events:none">
+      <div style="font-size:{fs_score}px;font-weight:900;color:#f1f5f9;line-height:1.1">{score}%</div>
+      <div style="font-size:{fs_label}px;color:#64748b;font-weight:700;letter-spacing:.08em;text-transform:uppercase">score</div>
+    </div>
+  </div>
+  {grade_html}
+</div>"""
+
+
 def chip(label, kind="blue"):
     return f"<span class='chip chip-{kind}'>{xe(label)}</span>"
 

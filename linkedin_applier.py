@@ -32,18 +32,6 @@ _LINKEDIN_BASE  = "https://www.linkedin.com"
 
 # ── Credential helpers ────────────────────────────────────────────
 
-def get_credentials() -> tuple[str, str]:
-    """Return (email, password) from env vars or raise."""
-    email    = os.getenv("LINKEDIN_EMAIL", "")
-    password = os.getenv("LINKEDIN_PASSWORD", "")
-    if not email or not password:
-        raise EnvironmentError(
-            "Set LINKEDIN_EMAIL and LINKEDIN_PASSWORD in your .env file. "
-            "These are never logged or transmitted anywhere — only used locally by Playwright."
-        )
-    return email, password
-
-
 # ── Browser session ────────────────────────────────────────────────
 
 class LinkedInSession:
@@ -52,7 +40,9 @@ class LinkedInSession:
     Always uses non-headless mode so the user can see what's happening.
     """
 
-    def __init__(self, slow_mo: int = 400):
+    def __init__(self, email: str, password: str, slow_mo: int = 400):
+        self._email = email
+        self._password = password
         self._slow_mo = slow_mo
         self._pw = None
         self._browser = None
@@ -94,7 +84,7 @@ class LinkedInSession:
 
     def login(self) -> bool:
         """Log into LinkedIn. Returns True on success."""
-        email, password = get_credentials()
+        email, password = self._email, self._password
         page = self._page
 
         page.goto(f"{_LINKEDIN_BASE}/login", wait_until="networkidle")
@@ -324,6 +314,8 @@ def run_apply_session(
     profile: dict,
     resume_text: str,
     confirm_callback,
+    email: str = "",
+    password: str = "",
     status_callback=None,
     max_per_session: int = _MAX_PER_SESSION,
     dry_run: bool = True,
@@ -358,10 +350,16 @@ def run_apply_session(
             except Exception:
                 pass
 
-    with LinkedInSession() as session:
+    _email    = email    or os.getenv("LINKEDIN_EMAIL", "")
+    _password = password or os.getenv("LINKEDIN_PASSWORD", "")
+    if not _email or not _password:
+        yield {"error": "LinkedIn credentials required. Enter your email and password in the app."}
+        return
+
+    with LinkedInSession(email=_email, password=_password) as session:
         _cb("Logging in to LinkedIn…")
         if not session.login():
-            yield {"error": "LinkedIn login failed — check credentials in .env"}
+            yield {"error": "LinkedIn login failed — check your email and password."}
             return
 
         _cb(f"Searching Easy Apply jobs for '{role}' in '{location}'…")

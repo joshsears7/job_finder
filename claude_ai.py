@@ -73,7 +73,7 @@ def _call_claude(system: str, user: str, max_tokens: int = 2048, retries: int = 
             with client.messages.stream(
                 model=_HAIKU,
                 max_tokens=max_tokens,
-                system=system,
+                system=[{"type": "text", "text": system, "cache_control": {"type": "ephemeral"}}],
                 messages=[{"role": "user", "content": user}],
             ) as stream:
                 msg = stream.get_final_message()
@@ -118,7 +118,7 @@ def _stream_claude(system: str, user: str, max_tokens: int = 2048, model: str = 
         with client.messages.stream(
             model=model,
             max_tokens=max_tokens,
-            system=system,
+            system=[{"type": "text", "text": system, "cache_control": {"type": "ephemeral"}}],
             messages=[{"role": "user", "content": user}],
         ) as stream:
             for text in stream.text_stream:

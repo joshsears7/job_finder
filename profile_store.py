@@ -70,11 +70,15 @@ _JSON_FIELDS = {
 
 
 def _serialize(profile: dict) -> dict:
-    """Convert list fields to JSON strings for storage."""
+    """Convert list fields to JSON strings and bools to ints for storage."""
     out = dict(profile)
     for f in _JSON_FIELDS:
         if f in out and isinstance(out[f], list):
             out[f] = json.dumps(out[f])
+    # PostgreSQL INTEGER columns reject Python bools; SQLite accepts them silently
+    for k, v in out.items():
+        if isinstance(v, bool):
+            out[k] = int(v)
     return out
 
 

@@ -15,7 +15,7 @@ _client = None
 _last_error: str = ""
 
 # Model constants — override via env vars to avoid touching code on model upgrades
-_HAIKU  = os.getenv("CLAUDE_MODEL_HAIKU",  "claude-haiku-4-5")
+_HAIKU  = os.getenv("CLAUDE_MODEL_HAIKU",  "claude-haiku-4-5-20251001")
 _SONNET = os.getenv("CLAUDE_MODEL_SONNET", "claude-sonnet-4-6")
 
 
@@ -54,7 +54,8 @@ def get_last_error() -> str:
     return _last_error
 
 
-def _call_claude(system: str, user: str, max_tokens: int = 2048, retries: int = 2) -> str | None:
+def _call_claude(system: str, user: str, max_tokens: int = 2048, retries: int = 2,
+                 model: str = None) -> str | None:
     """
     Claude API call with retry logic and error capture.
     Retries up to `retries` times on transient errors (rate-limit, server error).
@@ -67,11 +68,12 @@ def _call_claude(system: str, user: str, max_tokens: int = 2048, retries: int = 
         _last_error = "ANTHROPIC_API_KEY not set — Claude features are unavailable."
         return None
 
+    _model = model or _HAIKU
     last_exc = None
     for attempt in range(retries + 1):
         try:
             with client.messages.stream(
-                model=_HAIKU,
+                model=_model,
                 max_tokens=max_tokens,
                 system=[{"type": "text", "text": system, "cache_control": {"type": "ephemeral"}}],
                 messages=[{"role": "user", "content": user}],
@@ -301,8 +303,7 @@ Requirements:
 - Close: direct ask (not "I look forward to hearing from you") — e.g. "I'd welcome a conversation about..."
 - Under 280 words total"""
 
-    result = _call_claude_sonnet(system, user, max_tokens=600)
-    return result if result else _call_claude(system, user, max_tokens=600)
+    return _call_claude(system, user, max_tokens=600, model=_SONNET)
 
 
 def generate_about_claude(profile: dict, target_role: str = "") -> str | None:
@@ -837,23 +838,7 @@ Under 300 words. Be direct. No motivational fluff."""
 
 def _call_claude_sonnet(system: str, user: str, max_tokens: int = 1500):
     """Higher-quality Sonnet pathway for career intelligence features."""
-    _client = _get_client()
-    if _client is None:
-        return None
-    try:
-        full = ""
-        with _client.messages.stream(
-            model=_SONNET,
-            max_tokens=max_tokens,
-            system=[{"type": "text", "text": system,
-                     "cache_control": {"type": "ephemeral"}}],
-            messages=[{"role": "user", "content": user}],
-        ) as s:
-            for chunk in s.text_stream:
-                full += chunk
-        return full
-    except Exception as e:
-        return None
+    return _call_claude(system, user, max_tokens=max_tokens, model=_SONNET)
 
 
 def _parse_json_response(text) -> dict:

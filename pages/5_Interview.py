@@ -23,7 +23,7 @@ tab_qs, tab_star, tab_salary, tab_ask, tab_debrief = st.tabs([
 with tab_qs:
     st.markdown("<div class='section-tag'>Job Context</div>", unsafe_allow_html=True)
 
-    all_saved  = tracker.get_all()
+    all_saved  = tracker.get_all(st.session_state.get("active_user_id", 1))
     job_list   = [(a["title"], a["company"], a.get("url",""), "") for a in all_saved if a["status"] in ("applied","interview","saved")]
     searched   = st.session_state.get("jobs", [])
     for j in searched:

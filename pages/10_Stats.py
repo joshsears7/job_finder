@@ -127,7 +127,7 @@ with tab_scanner:
 # ── Pipeline Overview ─────────────────────────────────────────────
 with tab_pipeline:
     st.markdown("<div class='section-tag'>Application Pipeline</div>", unsafe_allow_html=True)
-    apps = tracker.get_all()
+    apps = tracker.get_all(user_id)
 
     if not apps:
         st.markdown("<div style='color:#64748b;font-size:13px'>No applications tracked yet.</div>", unsafe_allow_html=True)

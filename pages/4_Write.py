@@ -20,7 +20,7 @@ if not profile:
     st.stop()
 
 # ── Job context (shared across all tools) ──
-all_saved   = tracker.get_all()
+all_saved   = tracker.get_all(st.session_state.get("active_user_id", 1))
 search_jobs = st.session_state.get("jobs", [])
 prefill_job = st.session_state.pop("ai_prefill_job", None)
 
@@ -191,7 +191,7 @@ with col_output:
         st.markdown("### 🧭 Job Search Strategy")
         st.caption("Claude reviews your resume and application history and gives specific strategic advice — not generic tips.")
         if st.button("Get My Strategy", type="primary", key="ss_btn"):
-            all_apps = tracker.get_all()
+            all_apps = tracker.get_all(st.session_state.get("active_user_id", 1))
             with st.spinner("Claude is analyzing your search…"):
                 ss_result = job_search_strategy_claude(profile, all_apps)
             st.session_state.ws_output = ("_search_strategy", ss_result)

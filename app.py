@@ -747,7 +747,7 @@ def _dashboard_impl():
 
         # ──────── TAB 3: Today's Actions ─────────────────────────
         with dash_tab3:
-            _all_apps = tracker.get_all()
+            _all_apps = tracker.get_all(st.session_state.get("active_user_id", 1))
             _tasks = _todays_tasks(apps=_all_apps)
 
             # ── Job Search Health Score ───────────────────────────

@@ -15,6 +15,9 @@ inject_css()
 st.markdown("<div class='page-title'>LinkedIn Optimizer</div><div class='page-sub'>Generate headlines, About sections, cold DMs, and salary scripts — all tailored to your resume. Profile Score is optional.</div>", unsafe_allow_html=True)
 
 profile = st.session_state.get("resume")
+if not profile:
+    st.markdown(alert("Upload your resume on the Dashboard first — all outputs are tailored to your background.", "blue"), unsafe_allow_html=True)
+    st.stop()
 
 tab_headlines, tab_about, tab_msgs, tab_negotiate, tab_skills, tab_score = st.tabs([
     "Headlines", "About Section", "Messages", "Salary Negotiation", "Skills to Add", "Profile Score ↗"

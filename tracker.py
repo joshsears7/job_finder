@@ -117,9 +117,12 @@ def get_version_stats():
     return result
 
 
-def get_all():
+def get_all(user_id: int = 1):
     conn = _connect()
-    rows = conn.execute("SELECT * FROM applications ORDER BY date_saved DESC").fetchall()
+    rows = conn.execute(
+        f"SELECT * FROM applications WHERE user_id={db.P} ORDER BY date_saved DESC",
+        (user_id,),
+    ).fetchall()
     conn.close()
     return [dict(r) for r in rows]
 
@@ -407,7 +410,8 @@ def get_health_score(user_id: int = 1) -> dict:
     from datetime import date, timedelta
     conn = _connect()
     apps = [dict(r) for r in conn.execute(
-        "SELECT status, date_applied FROM applications"
+        f"SELECT status, date_applied FROM applications WHERE user_id={db.P}",
+        (user_id,),
     ).fetchall()]
     try:
         row = conn.execute(

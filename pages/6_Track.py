@@ -14,7 +14,7 @@ tab_pipeline, tab_followup, tab_crm = st.tabs(["Pipeline", "Follow-Ups", "Networ
 
 # ── Pipeline ──────────────────────────────────────────────────────
 with tab_pipeline:
-    apps = tracker.get_all()
+    apps = tracker.get_all(st.session_state.get("active_user_id", 1))
 
     if not apps:
         st.markdown(

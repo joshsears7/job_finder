@@ -20,7 +20,7 @@ if not profile:
 # ── Job Selector ──────────────────────────────────────────────────
 st.markdown("<div class='section-tag'>Select a Job</div>", unsafe_allow_html=True)
 
-all_saved  = tracker.get_all()
+all_saved  = tracker.get_all(st.session_state.get("active_user_id", 1))
 search_jobs = st.session_state.get("jobs", [])
 prefill    = st.session_state.pop("apply_pkg_job", None)
 
@@ -317,7 +317,7 @@ if pkg_ats:
         # Job came from a live search — save it first, then mark applied
         if st.button("Save & Mark as Applied", key="save_mark_applied"):
             tracker.save_job(pkg_job, score=pkg_ats.get("score", 0) if pkg_ats else 0)
-            _saved_app = next((a for a in tracker.get_all() if a["job_id"] == _app_id_str), None)
+            _saved_app = next((a for a in tracker.get_all(st.session_state.get("active_user_id", 1)) if a["job_id"] == _app_id_str), None)
             if _saved_app:
                 tracker.update_status(_saved_app["id"], "applied")
             st.success("Saved and marked as applied. Follow-up reminder scheduled for 7 days from now.")

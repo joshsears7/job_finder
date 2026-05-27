@@ -80,10 +80,10 @@ BLS_PROJECTIONS = {
 # ── RSS news feeds ───────────────────────────────────────────────
 
 NEWS_FEEDS = [
-    ("BBC Business",          "https://feeds.bbci.co.uk/news/business/rss.xml"),
-    ("NPR Economy",           "https://feeds.npr.org/1017/rss.xml"),
-    ("MarketWatch Top",       "https://feeds.content.dowjones.io/public/rss/mw_topstories"),
-    ("Wall Street Journal",   "https://feeds.a.dj.com/rss/WSJcomUSBusiness.xml"),
+    ("BBC Business",  "https://feeds.bbci.co.uk/news/business/rss.xml"),
+    ("NPR Economy",   "https://feeds.npr.org/1017/rss.xml"),
+    ("CNBC Economy",  "https://www.cnbc.com/id/20910258/device/rss/rss.html"),
+    ("AP Business",   "https://feeds.apnews.com/rss/APf-Business"),
 ]
 
 JOB_KEYWORDS = {
@@ -122,10 +122,8 @@ def _fetch_fred(series_id, limit=3):
 def _fetch_rss(url, max_items=6):
     try:
         r = requests.get(url, timeout=8, headers={"User-Agent": "Mozilla/5.0"})
-        # Disable entity resolution to prevent XXE attacks
-        parser = ET.XMLParser()
-        parser.entity = {}
-        root = ET.fromstring(r.content, parser)
+        r.raise_for_status()
+        root = ET.fromstring(r.content)
         items = root.findall(".//item")
         out = []
         for item in items:

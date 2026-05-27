@@ -11,7 +11,6 @@ Sources:
 
 import os
 import re
-import json
 import time
 import requests
 from collections import Counter
@@ -20,8 +19,8 @@ from functools import lru_cache
 
 from resume_parser import COMMON_SKILLS
 
-_CACHE_FILE = os.path.join(os.path.dirname(__file__), "cache", "market_intel_cache.json")
-_CACHE_TTL  = 4 * 3600  # 4 hours
+_CACHE_TTL = 4 * 3600  # 4 hours
+_mem_cache: dict = {}   # in-memory cache — no filesystem dependency
 
 _HN_ALGOLIA = "https://hn.algolia.com/api/v1/search"
 _HN_FIREBASE = "https://hacker-news.firebaseio.com/v1/item"
@@ -169,18 +168,11 @@ def get_market_intel():
     Returns dict with:
       hn_title, hn_skills, gh_repos, gh_languages, jobicy_skills
 
-    Results are cached to disk for _CACHE_TTL seconds to avoid slow HN fetches on every load.
+    Results are cached in-memory for _CACHE_TTL seconds.
     """
     # ── Cache check ──────────────────────────────────────────────
-    if os.path.exists(_CACHE_FILE):
-        try:
-            with open(_CACHE_FILE) as f:
-                cached = json.load(f)
-            if time.time() - cached.get("_ts", 0) < _CACHE_TTL:
-                cached.pop("_ts", None)
-                return cached
-        except Exception:
-            pass
+    if _mem_cache and time.time() - _mem_cache.get("_ts", 0) < _CACHE_TTL:
+        return {k: v for k, v in _mem_cache.items() if k != "_ts"}
 
     results = {
         "hn_title": None,
@@ -228,12 +220,8 @@ def get_market_intel():
     results["gh_languages"] = langs
     results["jobicy_skills"] = jc_skills
 
-    # ── Write cache ──────────────────────────────────────────────
-    try:
-        os.makedirs(os.path.dirname(_CACHE_FILE), exist_ok=True)
-        with open(_CACHE_FILE, "w") as f:
-            json.dump({**results, "_ts": time.time()}, f)
-    except Exception:
-        pass
+    # ── Update in-memory cache ────────────────────────────────────
+    _mem_cache.clear()
+    _mem_cache.update({**results, "_ts": time.time()})
 
     return results

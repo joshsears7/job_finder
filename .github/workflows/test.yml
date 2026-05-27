@@ -1,0 +1,31 @@
+name: Test Suite
+
+on:
+  push:
+    branches: ["**"]
+  pull_request:
+    branches: ["main", "master"]
+
+jobs:
+  test:
+    runs-on: ubuntu-latest
+    timeout-minutes: 10
+
+    steps:
+      - uses: actions/checkout@v4.2.2
+
+      - name: Set up Python
+        uses: actions/setup-python@v5.6.0
+        with:
+          python-version: "3.11"
+          cache: "pip"
+
+      - name: Install dependencies
+        run: |
+          pip install --upgrade pip
+          pip install pytest pytest-cov
+          pip install pdfplumber python-docx python-dotenv requests
+          pip install -r requirements.txt
+
+      - name: Run fast tests (no model)
+        run: pytest tests/ -m "not slow" --tb=short -q

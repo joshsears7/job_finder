@@ -33,10 +33,12 @@ def init_db():
             notes          TEXT,
             salary_min     REAL,
             salary_max     REAL,
-            resume_version TEXT
+            resume_version TEXT,
+            user_id        INTEGER DEFAULT 1
         )
     """)
     db.add_column_if_missing(conn, "applications", "resume_version", "TEXT")
+    db.add_column_if_missing(conn, "applications", "user_id", "INTEGER DEFAULT 1")
     db.create_table(conn, """
         CREATE TABLE IF NOT EXISTS followup_schedule (
             id           INTEGER PRIMARY KEY AUTOINCREMENT,

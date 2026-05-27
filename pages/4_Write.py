@@ -164,7 +164,7 @@ with col_output:
                 st.markdown(
                     f"<div class='card' style='border-left:4px solid #059669;margin-bottom:12px'>"
                     f"<div style='font-size:11px;font-weight:700;color:#059669;margin-bottom:6px'>🏆 RECOMMENDATION</div>"
-                    f"<div style='font-size:14px;color:#0f172a;line-height:1.6'>{oc_res.get('recommendation', '')}</div>"
+                    f"<div style='font-size:14px;color:#e2e8f0;line-height:1.6'>{oc_res.get('recommendation', '')}</div>"
                     f"</div>", unsafe_allow_html=True
                 )
                 breakdown = oc_res.get("breakdown", [])
@@ -203,7 +203,7 @@ with col_output:
                 st.markdown("<div class='section-tag'>Your Personalized Strategy</div>", unsafe_allow_html=True)
                 for para in ss_res.strip().split("\n\n"):
                     if para.strip():
-                        st.markdown(f"<div style='font-size:14px;color:#0f172a;line-height:1.7;margin-bottom:16px'>{para.strip()}</div>", unsafe_allow_html=True)
+                        st.markdown(f"<div style='font-size:14px;color:#e2e8f0;line-height:1.7;margin-bottom:16px'>{para.strip()}</div>", unsafe_allow_html=True)
                 st.markdown(alert("🔁 <b>Tip:</b> Re-run this after every 10 applications — strategy should evolve as you get more data.", "blue"), unsafe_allow_html=True)
                 from pdf_export import writing_output_pdf
                 ss_pdf = writing_output_pdf("Job Search Strategy", ss_res, name=profile.get("name", ""))

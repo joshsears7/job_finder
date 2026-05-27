@@ -493,7 +493,7 @@ if "jobs" in st.session_state and st.session_state.jobs:
         _easy_html = ""
         if "linkedin.com" in j.get("url","").lower():
             _easy_html = (
-                "<span style='display:inline-block;background:#f0fdf4;color:#166534;"
+                "<span style='display:inline-block;background:#052010;color:#86efac;"
                 "border-radius:4px;padding:1px 7px;font-size:10.5px;font-weight:600;margin-left:6px'>"
                 "🔗 LinkedIn</span>"
             )
@@ -628,16 +628,16 @@ if "jobs" in st.session_state and st.session_state.jobs:
             st.markdown(
                 f"<div class='card-slate' style='margin-bottom:6px;border-left:4px solid #7c3aed'>"
                 f"<div style='font-size:11px;font-weight:700;color:#7c3aed;margin-bottom:6px'>🎯 YOUR HONEST FIT — {j['title']} @ {j['company']}</div>"
-                f"<div style='font-size:13px;color:#0f172a;line-height:1.6;white-space:pre-line'>{fit_result}</div>"
+                f"<div style='font-size:13px;color:#cbd5e1;line-height:1.6;white-space:pre-line'>{fit_result}</div>"
                 f"</div>", unsafe_allow_html=True
             )
 
         if st.session_state.get(f"ip_{j['id']}"):
             ip = _interview_prep_pack(j, profile)
             st.markdown(
-                f"<div style='background:#faf5ff;border:1px solid #ddd6fe;border-radius:10px;"
+                f"<div style='background:#1a1040;border:1px solid #4c1d95;border-radius:10px;"
                 f"padding:16px 18px;margin-bottom:8px'>"
-                f"<div style='font-size:11px;font-weight:700;color:#7c3aed;text-transform:uppercase;"
+                f"<div style='font-size:11px;font-weight:700;color:#a78bfa;text-transform:uppercase;"
                 f"letter-spacing:.06em;margin-bottom:10px'>🎓 Interview Prep Pack — {j['title']} @ {j['company']}</div>"
                 f"</div>", unsafe_allow_html=True
             )
@@ -646,9 +646,9 @@ if "jobs" in st.session_state and st.session_state.jobs:
                 st.caption(f"Based on competencies detected in JD: {', '.join(ip['detected'])}")
                 for i, q in enumerate(ip["questions"], 1):
                     st.markdown(
-                        f"<div style='padding:8px 12px;margin-bottom:6px;background:#fff;"
-                        f"border:1px solid #e2e8f0;border-left:3px solid #7c3aed;border-radius:6px;"
-                        f"font-size:13px;color:#0f172a'>"
+                        f"<div style='padding:8px 12px;margin-bottom:6px;background:#1a1040;"
+                        f"border:1px solid #4c1d95;border-left:3px solid #7c3aed;border-radius:6px;"
+                        f"font-size:13px;color:#e2e8f0'>"
                         f"<span style='font-weight:700;color:#7c3aed;margin-right:8px'>{i}.</span>{q}</div>",
                         unsafe_allow_html=True
                     )
@@ -698,7 +698,7 @@ if "jobs" in st.session_state and st.session_state.jobs:
                 f"<div class='card-slate' style='margin-bottom:6px'>"
                 f"<div style='font-weight:700;font-size:14px;margin-bottom:6px'>🏢 {co_name}</div>"
                 + (f"<div style='font-size:12px;color:#475569;margin-bottom:8px'><i>{co_data['description']}</i></div>"
-                   f"<div style='font-size:13px;color:#0f172a;line-height:1.55'>{co_data['summary']}</div>"
+                   f"<div style='font-size:13px;color:#cbd5e1;line-height:1.55'>{co_data['summary']}</div>"
                    if co_data else
                    f"<div style='font-size:12px;color:#94a3b8'>No Wikipedia entry found for this company.</div>")
                 + f"<div style='margin-top:10px;display:flex;gap:12px;font-size:12px'>"
@@ -714,7 +714,7 @@ if "jobs" in st.session_state and st.session_state.jobs:
                     if ci_data.get("culture_signals"):
                         st.markdown("**🧭 Culture signals**")
                         for s in ci_data["culture_signals"]:
-                            st.markdown(f"<div style='font-size:12px;padding:4px 0;border-bottom:1px solid #e2e8f0;color:#0f172a'>• {s}</div>", unsafe_allow_html=True)
+                            st.markdown(f"<div style='font-size:12px;padding:4px 0;border-bottom:1px solid #1e293b;color:#cbd5e1'>• {s}</div>", unsafe_allow_html=True)
                     if ci_data.get("red_flags"):
                         st.markdown("<div style='margin-top:8px'></div>", unsafe_allow_html=True)
                         st.markdown("**🚩 Watch out for**")
@@ -724,7 +724,7 @@ if "jobs" in st.session_state and st.session_state.jobs:
                     if ci_data.get("day_in_life"):
                         st.markdown("**📅 What a week looks like**")
                         for d in ci_data["day_in_life"]:
-                            st.markdown(f"<div style='font-size:12px;padding:4px 0;border-bottom:1px solid #e2e8f0;color:#0f172a'>• {d}</div>", unsafe_allow_html=True)
+                            st.markdown(f"<div style='font-size:12px;padding:4px 0;border-bottom:1px solid #1e293b;color:#cbd5e1'>• {d}</div>", unsafe_allow_html=True)
                     if ci_data.get("likely_questions"):
                         st.markdown("<div style='margin-top:8px'></div>", unsafe_allow_html=True)
                         st.markdown("**❓ They'll likely ask**")
@@ -740,8 +740,8 @@ if "jobs" in st.session_state and st.session_state.jobs:
         if _matches:
             _names = ", ".join(c["name"] for c in _matches[:3])
             st.markdown(
-                f"<div style='background:#f0fdf4;border:1px solid #86efac;border-radius:8px;"
-                f"padding:8px 14px;margin-bottom:6px;font-size:13px'>"
+                f"<div style='background:#052010;border:1px solid #14532d;border-radius:8px;"
+                f"padding:8px 14px;margin-bottom:6px;font-size:13px;color:#bbf7d0'>"
                 f"🤝 <b>Referral Radar:</b> You know someone at <b>{j['company']}</b> — {_names}"
                 f"</div>", unsafe_allow_html=True
             )

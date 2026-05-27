@@ -1,0 +1,16 @@
+{
+  "permissions": {
+    "deny": [
+      "Read(./.env)",
+      "Read(./.env.*)",
+      "Bash(cat .env*)",
+      "Read(./users.db)",
+      "Read(./applications.db)",
+      "Read(./analytics.db)"
+    ]
+  },
+  "env": {
+    "PYTHONPATH": "/Users/joshuasears/Documents/Projects/job_finder",
+    "PYTHON": "/opt/anaconda3/bin/python3"
+  }
+}

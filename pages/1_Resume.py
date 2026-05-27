@@ -264,6 +264,41 @@ with tab_bullets:
         weak    = [b for b in bullets if b["score"] <  75]
         avg_sc  = int(sum(b["score"] for b in bullets) / len(bullets))
 
+        from claude_ai import rewrite_bullet_claude
+
+        _WEAK_VERB_MAP = {
+            "helped": "Supported", "worked on": "Executed", "was responsible for": "Owned",
+            "did": "Delivered", "made": "Built", "assisted": "Partnered on", "handled": "Managed",
+            "worked with": "Collaborated with", "involved in": "Contributed to",
+            "participated in": "Drove", "used": "Leveraged", "did work on": "Executed",
+        }
+        _STRONG_VERBS = [
+            "Accelerated","Achieved","Analyzed","Built","Championed","Collaborated",
+            "Delivered","Designed","Developed","Drove","Engineered","Executed","Generated",
+            "Launched","Led","Managed","Optimized","Orchestrated","Owned","Partnered",
+            "Reduced","Scaled","Spearheaded","Streamlined","Transformed",
+        ]
+
+        def _local_bullet_rewrites(bullet_text):
+            text = bullet_text.strip().rstrip(".")
+            rewrite1 = text
+            for weak_v, strong_v in _WEAK_VERB_MAP.items():
+                if text.lower().startswith(weak_v):
+                    rewrite1 = strong_v + text[len(weak_v):]
+                    break
+            else:
+                verb = random.choice(_STRONG_VERBS)
+                parts = text.split(" ", 1)
+                if len(parts) > 1:
+                    rewrite1 = f"{verb} {parts[1]}"
+            rewrite2 = f"{rewrite1.rstrip('.')} — resulting in [add specific metric: X%, $Y, Z hours saved]."
+            rewrite3 = f"{rewrite1.rstrip('.')} to achieve [outcome], saving [time/money] across [scope]."
+            return [
+                ("Stronger verb", rewrite1),
+                ("+ Result metric", rewrite2),
+                ("+ Scope & impact", rewrite3),
+            ]
+
         c1, c2, c3, c4 = st.columns(4)
         c1.metric("Bullets Analyzed", len(bullets))
         c2.metric("Avg Score", f"{avg_sc}%")
@@ -282,64 +317,30 @@ with tab_bullets:
                 left_border = "#dc2626" if b["score"] < 50 else "#d97706"
                 issues_html = "".join(
                     f"<div style='display:flex;align-items:flex-start;gap:6px;margin-bottom:5px'>"
-                    f"<span style='color:#dc2626;font-size:12px;line-height:1.6;flex-shrink:0'>⚠</span>"
-                    f"<span style='font-size:12.5px;color:#7f1d1d;line-height:1.6'>{i}</span>"
+                    f"<span style='color:#ef4444;font-size:12px;line-height:1.6;flex-shrink:0'>⚠</span>"
+                    f"<span style='font-size:12.5px;color:#fca5a5;line-height:1.6'>{i}</span>"
                     f"</div>"
                     for i in b["issues"]
                 )
                 st.markdown(
-                    f"<div style='border:1px solid #e2e8f0;border-left:4px solid {left_border};"
-                    f"border-radius:10px;padding:14px 16px;margin-bottom:12px;background:#fff'>"
+                    f"<div style='border:1px solid #1a2847;border-left:4px solid {left_border};"
+                    f"border-radius:10px;padding:14px 16px;margin-bottom:12px;background:#0d1424'>"
                     f"<div style='display:flex;align-items:flex-start;gap:10px;margin-bottom:10px'>"
                     f"<div style='background:{bg};color:#fff;border-radius:6px;padding:3px 9px;"
                     f"font-size:12px;font-weight:800;white-space:nowrap;flex-shrink:0'>{b['score']}% {grade_l}</div>"
-                    f"<div style='font-size:13px;color:#374151;font-style:italic;line-height:1.5'>\"{b['text'][:150]}{'…' if len(b['text'])>150 else ''}\"</div>"
+                    f"<div style='font-size:13px;color:#cbd5e1;font-style:italic;line-height:1.5'>\"{b['text'][:150]}{'…' if len(b['text'])>150 else ''}\"</div>"
                     f"</div>"
-                    f"<div style='background:#fff7f7;border-radius:6px;padding:8px 10px;margin-bottom:8px'>"
+                    f"<div style='background:#1a0a0a;border-radius:6px;padding:8px 10px;margin-bottom:8px'>"
                     f"{issues_html}"
                     f"</div>"
-                    f"<div style='padding:8px 12px;background:#f0f9ff;border-radius:6px;"
-                    f"font-size:13px;border-left:3px solid #2563eb;color:#1e3a5f;line-height:1.6'>"
+                    f"<div style='padding:8px 12px;background:#0a1628;border-radius:6px;"
+                    f"font-size:13px;border-left:3px solid #2563eb;color:#93c5fd;line-height:1.6'>"
                     f"<span style='font-weight:700;font-size:11px;text-transform:uppercase;"
-                    f"letter-spacing:.06em;color:#2563eb;display:block;margin-bottom:3px'>Suggested rewrite</span>"
+                    f"letter-spacing:.06em;color:#3b82f6;display:block;margin-bottom:3px'>Suggested rewrite</span>"
                     f"{b['suggestion']}</div>"
                     f"</div>",
                     unsafe_allow_html=True
                 )
-                from claude_ai import rewrite_bullet_claude
-
-                _WEAK_VERB_MAP = {
-                    "helped": "Supported", "worked on": "Executed", "was responsible for": "Owned",
-                    "did": "Delivered", "made": "Built", "assisted": "Partnered on", "handled": "Managed",
-                    "worked with": "Collaborated with", "involved in": "Contributed to",
-                    "participated in": "Drove", "used": "Leveraged", "did work on": "Executed",
-                }
-                _STRONG_VERBS = [
-                    "Accelerated","Achieved","Analyzed","Built","Championed","Collaborated",
-                    "Delivered","Designed","Developed","Drove","Engineered","Executed","Generated",
-                    "Launched","Led","Managed","Optimized","Orchestrated","Owned","Partnered",
-                    "Reduced","Scaled","Spearheaded","Streamlined","Transformed",
-                ]
-
-                def _local_bullet_rewrites(bullet_text):
-                    text = bullet_text.strip().rstrip(".")
-                    rewrite1 = text
-                    for weak, strong in _WEAK_VERB_MAP.items():
-                        if text.lower().startswith(weak):
-                            rewrite1 = strong + text[len(weak):]
-                            break
-                    else:
-                        verb = random.choice(_STRONG_VERBS)
-                        parts = text.split(" ", 1)
-                        if len(parts) > 1:
-                            rewrite1 = f"{verb} {parts[1]}"
-                    rewrite2 = f"{rewrite1.rstrip('.')} — resulting in [add specific metric: X%, $Y, Z hours saved]."
-                    rewrite3 = f"{rewrite1.rstrip('.')} to achieve [outcome], saving [time/money] across [scope]."
-                    return [
-                        ("Stronger verb", rewrite1),
-                        ("+ Result metric", rewrite2),
-                        ("+ Scope & impact", rewrite3),
-                    ]
 
                 ai_key    = f"ai_bullet_{idx}"
                 local_key = f"local_bullet_{idx}"
@@ -356,11 +357,11 @@ with tab_bullets:
                 if st.session_state.get(local_key):
                     for _rw_label, _rw_text in st.session_state[local_key]:
                         st.markdown(
-                            f"<div style='background:#f8fafc;border:1px solid #e2e8f0;border-left:3px solid #7c3aed;"
+                            f"<div style='background:#1a1040;border:1px solid #4c1d95;border-left:3px solid #7c3aed;"
                             f"border-radius:6px;padding:8px 12px;margin-bottom:6px'>"
-                            f"<div style='font-size:10px;font-weight:700;color:#7c3aed;text-transform:uppercase;"
+                            f"<div style='font-size:10px;font-weight:700;color:#a78bfa;text-transform:uppercase;"
                             f"letter-spacing:.06em;margin-bottom:3px'>{_rw_label}</div>"
-                            f"<div style='font-size:13px;color:#0f172a'>{_rw_text}</div>"
+                            f"<div style='font-size:13px;color:#e2e8f0'>{_rw_text}</div>"
                             f"</div>",
                             unsafe_allow_html=True
                         )
@@ -394,14 +395,14 @@ with tab_suggestions:
         d_clarity   = dims.get("clarity", 5)
         d_structure = dims.get("structure", 5)
         def _score_card(label, val, desc):
-            c = "#059669" if val >= 7 else "#d97706" if val >= 5 else "#dc2626"
-            bg = "#f0fdf4" if val >= 7 else "#fffbeb" if val >= 5 else "#fef2f2"
+            c = "#10b981" if val >= 7 else "#f59e0b" if val >= 5 else "#ef4444"
+            bg = "#031409" if val >= 7 else "#140c00" if val >= 5 else "#150404"
             return (
                 f"<div style='background:{bg};border-radius:10px;padding:14px 16px;"
-                f"text-align:center;border:1px solid {c}30'>"
+                f"text-align:center;border:1px solid {c}40'>"
                 f"<div style='font-size:26px;font-weight:900;color:{c}'>{val}/10</div>"
-                f"<div style='font-size:12px;font-weight:700;color:#374151;margin:2px 0'>{label}</div>"
-                f"<div style='font-size:11px;color:#6b7280'>{desc}</div>"
+                f"<div style='font-size:12px;font-weight:700;color:#e2e8f0;margin:2px 0'>{label}</div>"
+                f"<div style='font-size:11px;color:#64748b'>{desc}</div>"
                 f"</div>"
             )
         sc1, sc2, sc3 = st.columns(3)
@@ -418,22 +419,22 @@ with tab_suggestions:
         )
         for i, item in enumerate(quick_wins, 1):
             example_html = (
-                f"<div style='margin-top:8px;padding:7px 10px;background:#f0f9ff;"
+                f"<div style='margin-top:8px;padding:7px 10px;background:#0a1628;"
                 f"border-left:3px solid #2563eb;border-radius:4px;"
-                f"font-size:12.5px;color:#1e3a5f;font-style:italic'>"
+                f"font-size:12.5px;color:#93c5fd;font-style:italic'>"
                 f"{item['example']}</div>"
             ) if item.get("example") else ""
             st.markdown(
-                f"<div style='border:1px solid #e2e8f0;border-left:4px solid #059669;"
-                f"border-radius:10px;padding:14px 16px;margin-bottom:8px;background:#fff'>"
+                f"<div style='border:1px solid #14532d;border-left:4px solid #10b981;"
+                f"border-radius:10px;padding:14px 16px;margin-bottom:8px;background:#031409'>"
                 f"<div style='display:flex;align-items:flex-start;gap:10px'>"
-                f"<div style='background:#059669;color:#fff;border-radius:50%;width:22px;height:22px;"
+                f"<div style='background:#10b981;color:#fff;border-radius:50%;width:22px;height:22px;"
                 f"display:flex;align-items:center;justify-content:center;"
                 f"font-size:11px;font-weight:800;flex-shrink:0'>{i}</div>"
                 f"<div style='flex:1'>"
-                f"<div style='font-size:13.5px;font-weight:700;color:#0f172a;margin-bottom:4px'>{item['title']}</div>"
-                f"<div style='font-size:12.5px;color:#6b7280;margin-bottom:4px'><b>Why it matters:</b> {item['why']}</div>"
-                f"<div style='font-size:12.5px;color:#374151'><b>Fix:</b> {item['how']}</div>"
+                f"<div style='font-size:13.5px;font-weight:700;color:#f1f5f9;margin-bottom:4px'>{item['title']}</div>"
+                f"<div style='font-size:12.5px;color:#64748b;margin-bottom:4px'><b style='color:#94a3b8'>Why it matters:</b> {item['why']}</div>"
+                f"<div style='font-size:12.5px;color:#cbd5e1'><b style='color:#94a3b8'>Fix:</b> {item['how']}</div>"
                 f"{example_html}"
                 f"</div></div></div>",
                 unsafe_allow_html=True
@@ -447,17 +448,17 @@ with tab_suggestions:
         )
         for item in high_impact:
             example_html = (
-                f"<div style='margin-top:8px;padding:7px 10px;background:#f0fdf4;"
-                f"border-left:3px solid #059669;border-radius:4px;"
-                f"font-size:12.5px;color:#064e3b'>"
+                f"<div style='margin-top:8px;padding:7px 10px;background:#031409;"
+                f"border-left:3px solid #10b981;border-radius:4px;"
+                f"font-size:12.5px;color:#6ee7b7'>"
                 f"<b>Example:</b> {item['example']}</div>"
             ) if item.get("example") else ""
             st.markdown(
-                f"<div style='border:1px solid #e2e8f0;border-left:4px solid #2563eb;"
-                f"border-radius:10px;padding:14px 16px;margin-bottom:8px;background:#fff'>"
-                f"<div style='font-size:13.5px;font-weight:700;color:#0f172a;margin-bottom:5px'>{item['title']}</div>"
-                f"<div style='font-size:12.5px;color:#6b7280;margin-bottom:4px'><b>Why:</b> {item['why']}</div>"
-                f"<div style='font-size:12.5px;color:#374151'><b>How:</b> {item['how']}</div>"
+                f"<div style='border:1px solid #1e3a8a;border-left:4px solid #3b82f6;"
+                f"border-radius:10px;padding:14px 16px;margin-bottom:8px;background:#0a1628'>"
+                f"<div style='font-size:13.5px;font-weight:700;color:#f1f5f9;margin-bottom:5px'>{item['title']}</div>"
+                f"<div style='font-size:12.5px;color:#64748b;margin-bottom:4px'><b style='color:#94a3b8'>Why:</b> {item['why']}</div>"
+                f"<div style='font-size:12.5px;color:#cbd5e1'><b style='color:#94a3b8'>How:</b> {item['how']}</div>"
                 f"{example_html}"
                 f"</div>",
                 unsafe_allow_html=True
@@ -528,11 +529,11 @@ with tab_tailor:
             with st.expander("💡 Why these gaps matter — and how to fix them", expanded=True):
                 for g in gap_exps:
                     st.markdown(
-                        f"<div style='border:1px solid #e2e8f0;border-left:4px solid #d97706;"
-                        f"border-radius:8px;padding:10px 14px;margin-bottom:8px;background:#fff'>"
-                        f"<div style='font-weight:700;font-size:13px;color:#0f172a;margin-bottom:4px'>{g.get('skill','')}</div>"
-                        f"<div style='font-size:12.5px;color:#475569;margin-bottom:3px'><b>Why it matters:</b> {g.get('why','')}</div>"
-                        f"<div style='font-size:12.5px;color:#059669'><b>How to fix:</b> {g.get('how','')}</div>"
+                        f"<div style='border:1px solid #78350f;border-left:4px solid #f59e0b;"
+                        f"border-radius:8px;padding:10px 14px;margin-bottom:8px;background:#140c00'>"
+                        f"<div style='font-weight:700;font-size:13px;color:#fde68a;margin-bottom:4px'>{g.get('skill','')}</div>"
+                        f"<div style='font-size:12.5px;color:#64748b;margin-bottom:3px'><b style='color:#94a3b8'>Why it matters:</b> {g.get('why','')}</div>"
+                        f"<div style='font-size:12.5px;color:#6ee7b7'><b style='color:#94a3b8'>How to fix:</b> {g.get('how','')}</div>"
                         f"</div>", unsafe_allow_html=True
                     )
 
@@ -584,12 +585,12 @@ with tab_tailor:
                     f"{chip(r.get('keyword',''), 'purple')}"
                     f"<span style='font-size:11px;color:#94a3b8'>keyword targeted</span></div>"
                     f"<div style='display:grid;grid-template-columns:1fr 1fr;gap:12px'>"
-                    f"<div style='background:#fef2f2;border-radius:8px;padding:12px'>"
-                    f"<div style='font-size:10px;font-weight:700;color:#dc2626;margin-bottom:4px'>BEFORE</div>"
-                    f"<div style='font-size:13px;color:#1e293b'>{r.get('original','')}</div></div>"
-                    f"<div style='background:#f0fdf4;border-radius:8px;padding:12px'>"
-                    f"<div style='font-size:10px;font-weight:700;color:#059669;margin-bottom:4px'>AFTER — Claude Rewrite</div>"
-                    f"<div style='font-size:13px;color:#1e293b'>{r.get('rewritten','')}</div></div>"
+                    f"<div style='background:#150404;border-radius:8px;padding:12px'>"
+                    f"<div style='font-size:10px;font-weight:700;color:#ef4444;margin-bottom:4px'>BEFORE</div>"
+                    f"<div style='font-size:13px;color:#cbd5e1'>{r.get('original','')}</div></div>"
+                    f"<div style='background:#031409;border-radius:8px;padding:12px'>"
+                    f"<div style='font-size:10px;font-weight:700;color:#10b981;margin-bottom:4px'>AFTER — Claude Rewrite</div>"
+                    f"<div style='font-size:13px;color:#cbd5e1'>{r.get('rewritten','')}</div></div>"
                     f"</div></div>", unsafe_allow_html=True
                 )
         elif results:
@@ -616,12 +617,12 @@ with tab_tailor:
                     f"{chip(r['kw'], 'red')}"
                     f"<span style='font-size:11px;color:#94a3b8'>missing keyword → add to this bullet</span></div>"
                     f"<div style='display:grid;grid-template-columns:1fr 1fr;gap:12px'>"
-                    f"<div style='background:#fef2f2;border-radius:8px;padding:12px'>"
-                    f"<div style='font-size:10px;font-weight:700;color:#dc2626;margin-bottom:4px'>BEFORE</div>"
-                    f"<div style='font-size:13px;color:#1e293b'>{orig}</div></div>"
-                    f"<div style='background:#f0fdf4;border-radius:8px;padding:12px'>"
-                    f"<div style='font-size:10px;font-weight:700;color:#059669;margin-bottom:4px'>AFTER</div>"
-                    f"<div style='font-size:13px;color:#1e293b'>{rewrite}</div></div>"
+                    f"<div style='background:#150404;border-radius:8px;padding:12px'>"
+                    f"<div style='font-size:10px;font-weight:700;color:#ef4444;margin-bottom:4px'>BEFORE</div>"
+                    f"<div style='font-size:13px;color:#cbd5e1'>{orig}</div></div>"
+                    f"<div style='background:#031409;border-radius:8px;padding:12px'>"
+                    f"<div style='font-size:10px;font-weight:700;color:#10b981;margin-bottom:4px'>AFTER</div>"
+                    f"<div style='font-size:13px;color:#cbd5e1'>{rewrite}</div></div>"
                     f"</div></div>", unsafe_allow_html=True
                 )
         else:

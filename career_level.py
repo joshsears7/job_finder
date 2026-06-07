@@ -13,36 +13,100 @@ CareerLevel = Literal["entry", "mid", "senior", "exec"]
 # ── Title keyword lists ────────────────────────────────────────────
 
 _EXEC_TITLES = [
-    "chief executive", "chief operating", "chief financial", "chief marketing",
-    "chief revenue", "chief technology", "chief product", "chief people",
-    "chief information", "chief data", "ceo", "coo", "cfo", "cmo", "cro",
-    "cto", "cpo", "chro", "ciso", "president", "managing director",
-    "managing partner", "general partner", "executive vice president",
-    "senior vice president", "evp", "svp", "global head",
+    "chief executive",
+    "chief operating",
+    "chief financial",
+    "chief marketing",
+    "chief revenue",
+    "chief technology",
+    "chief product",
+    "chief people",
+    "chief information",
+    "chief data",
+    "ceo",
+    "coo",
+    "cfo",
+    "cmo",
+    "cro",
+    "cto",
+    "cpo",
+    "chro",
+    "ciso",
+    "president",
+    "managing director",
+    "managing partner",
+    "general partner",
+    "executive vice president",
+    "senior vice president",
+    "evp",
+    "svp",
+    "global head",
 ]
 
 _SENIOR_TITLES = [
-    "vice president", "vp of", "vp,", "director of", "director,",
-    "senior director", "principal", "head of", "group manager",
-    "senior manager", "associate director", "associate vp",
-    "partner", "lead architect", "distinguished engineer",
-    "staff engineer", "principal engineer",
+    "vice president",
+    "vp of",
+    "vp,",
+    "director of",
+    "director,",
+    "senior director",
+    "principal",
+    "head of",
+    "group manager",
+    "senior manager",
+    "associate director",
+    "associate vp",
+    "partner",
+    "lead architect",
+    "distinguished engineer",
+    "staff engineer",
+    "principal engineer",
 ]
 
 _MID_TITLES = [
-    "manager", "team lead", "senior analyst", "senior associate",
-    "senior specialist", "senior consultant", "project manager",
-    "program manager", "senior engineer", "senior developer",
-    "senior designer", "analyst ii", "analyst iii",
+    "manager",
+    "team lead",
+    "senior analyst",
+    "senior associate",
+    "senior specialist",
+    "senior consultant",
+    "project manager",
+    "program manager",
+    "senior engineer",
+    "senior developer",
+    "senior designer",
+    "analyst ii",
+    "analyst iii",
 ]
 
 _EXEC_KEYWORDS = [
-    "p&l", "profit and loss", "ebitda", "board of directors", "board member",
-    "c-suite", "c suite", "ipo", "m&a", "merger", "acquisition",
-    "turnaround", "transformation", "strategic plan", "go-to-market",
-    "fundrais", "series a", "series b", "series c", "venture capital",
-    "private equity", "due diligence", "organizational design", "restructur",
-    "market expansion", "capital allocation", "shareholder",
+    "p&l",
+    "profit and loss",
+    "ebitda",
+    "board of directors",
+    "board member",
+    "c-suite",
+    "c suite",
+    "ipo",
+    "m&a",
+    "merger",
+    "acquisition",
+    "turnaround",
+    "transformation",
+    "strategic plan",
+    "go-to-market",
+    "fundrais",
+    "series a",
+    "series b",
+    "series c",
+    "venture capital",
+    "private equity",
+    "due diligence",
+    "organizational design",
+    "restructur",
+    "market expansion",
+    "capital allocation",
+    "shareholder",
 ]
 
 _SCOPE_PATTERNS = [
@@ -58,6 +122,7 @@ _SCOPE_PATTERNS = [
 
 
 # ── Extraction helpers ─────────────────────────────────────────────
+
 
 def _detect_team_size(text: str) -> int:
     """Return the largest team / org size mentioned."""
@@ -98,6 +163,7 @@ def _detect_budget_scope_m(text: str) -> float:
 
 # ── Main detection ─────────────────────────────────────────────────
 
+
 def detect_career_level(profile: dict) -> dict:
     """
     Detect career level from resume signals.
@@ -111,12 +177,12 @@ def detect_career_level(profile: dict) -> dict:
         exec_keywords: list[str] — executive vocabulary found
         years        : int — years of experience
     """
-    text  = profile.get("raw_text", "").lower()
+    text = profile.get("raw_text", "").lower()
     titles_raw = profile.get("titles", [])
     titles = " ".join(t.lower() for t in titles_raw)
-    years  = profile.get("years_experience", 0) or 0
+    years = profile.get("years_experience", 0) or 0
 
-    score   = 0
+    score = 0
     signals = []
 
     # ── Title signals (strongest) ──────────────────────────────────
@@ -200,17 +266,18 @@ def detect_career_level(profile: dict) -> dict:
         level = "entry"
 
     return {
-        "level":          level,
-        "confidence":     min(95, score),
-        "signals":        signals[:5],
-        "team_size":      team_size,
+        "level": level,
+        "confidence": min(95, score),
+        "signals": signals[:5],
+        "team_size": team_size,
         "budget_scope_m": budget_m,
-        "exec_keywords":  exec_kw[:6],
-        "years":          years,
+        "exec_keywords": exec_kw[:6],
+        "years": years,
     }
 
 
 # ── Achievement density ────────────────────────────────────────────
+
 
 def achievement_density(bullet_analyses: list) -> dict:
     """
@@ -219,8 +286,10 @@ def achievement_density(bullet_analyses: list) -> dict:
     """
     if not bullet_analyses:
         return {
-            "density_pct": 0, "grade": "F",
-            "quantified": 0, "total": 0,
+            "density_pct": 0,
+            "grade": "F",
+            "quantified": 0,
+            "total": 0,
             "advice": "No bullets detected.",
             "unquantified_examples": [],
         }
@@ -230,27 +299,43 @@ def achievement_density(bullet_analyses: list) -> dict:
     pct = int(len(quantified) / len(bullet_analyses) * 100)
 
     if pct >= 80:
-        grade, advice = "A", "Excellent quantification. Your impact is concrete and credible to hiring managers."
+        grade, advice = (
+            "A",
+            "Excellent quantification. Your impact is concrete and credible to hiring managers.",
+        )
     elif pct >= 65:
-        grade, advice = "B", "Good, but the top 20% of candidates hit 80%+. Add numbers to your 3–4 vaguest bullets."
+        grade, advice = (
+            "B",
+            "Good, but the top 20% of candidates hit 80%+. Add numbers to your 3–4 vaguest bullets.",
+        )
     elif pct >= 45:
-        grade, advice = "C", "Under half your bullets have metrics. Prioritize adding %, $, team size, or time savings."
+        grade, advice = (
+            "C",
+            "Under half your bullets have metrics. Prioritize adding %, $, team size, or time savings.",
+        )
     elif pct >= 25:
-        grade, advice = "D", "Too few metrics. Without numbers, achievements blend into every other candidate's resume."
+        grade, advice = (
+            "D",
+            "Too few metrics. Without numbers, achievements blend into every other candidate's resume.",
+        )
     else:
-        grade, advice = "F", "Almost no quantified achievements — this is your single highest-leverage improvement."
+        grade, advice = (
+            "F",
+            "Almost no quantified achievements — this is your single highest-leverage improvement.",
+        )
 
     return {
         "density_pct": pct,
-        "grade":       grade,
-        "quantified":  len(quantified),
-        "total":       len(bullet_analyses),
-        "advice":      advice,
+        "grade": grade,
+        "quantified": len(quantified),
+        "total": len(bullet_analyses),
+        "advice": advice,
         "unquantified_examples": [b["text"][:100] for b in unquantified[:3]],
     }
 
 
 # ── Scope signal extraction ────────────────────────────────────────
+
 
 def scope_signals(text: str) -> list:
     """Return list of scope/scale signal labels found in the text."""
@@ -263,21 +348,22 @@ def scope_signals(text: str) -> list:
 
 # ── Display helpers ────────────────────────────────────────────────
 
+
 def level_label(level: str) -> str:
     return {
-        "entry":  "Entry Level",
-        "mid":    "Mid-Level",
+        "entry": "Entry Level",
+        "mid": "Mid-Level",
         "senior": "Senior Professional",
-        "exec":   "Executive",
+        "exec": "Executive",
     }.get(level, "Professional")
 
 
 def level_color(level: str) -> str:
     return {
-        "entry":  "#64748b",
-        "mid":    "#2563eb",
+        "entry": "#64748b",
+        "mid": "#2563eb",
         "senior": "#7c3aed",
-        "exec":   "#d97706",
+        "exec": "#d97706",
     }.get(level, "#64748b")
 
 
@@ -287,21 +373,38 @@ def level_benchmarks(level: str) -> dict:
         "entry": {
             "density_target": 50,
             "focus": "Skills, education, early impact — prove you can do the job",
-            "top_mistakes": ["Listing responsibilities, not achievements", "No metrics at all", "Generic objective statement"],
+            "top_mistakes": [
+                "Listing responsibilities, not achievements",
+                "No metrics at all",
+                "Generic objective statement",
+            ],
         },
         "mid": {
             "density_target": 65,
             "focus": "Specialization and impact — prove you're a strong individual contributor",
-            "top_mistakes": ["Underselling scope", "Not showing career progression", "Missing quantified wins"],
+            "top_mistakes": [
+                "Underselling scope",
+                "Not showing career progression",
+                "Missing quantified wins",
+            ],
         },
         "senior": {
             "density_target": 75,
             "focus": "Leadership, strategy, and cross-functional impact — prove you elevate the team",
-            "top_mistakes": ["Too operational, not strategic", "Missing team/budget scope", "No narrative arc"],
+            "top_mistakes": [
+                "Too operational, not strategic",
+                "Missing team/budget scope",
+                "No narrative arc",
+            ],
         },
         "exec": {
             "density_target": 80,
             "focus": "Vision, P&L, transformation — prove you can run a business unit",
-            "top_mistakes": ["Leading with tasks not outcomes", "Missing board/C-suite context", "Weak executive summary", "No career arc story"],
+            "top_mistakes": [
+                "Leading with tasks not outcomes",
+                "Missing board/C-suite context",
+                "Weak executive summary",
+                "No career arc story",
+            ],
         },
     }.get(level, {})

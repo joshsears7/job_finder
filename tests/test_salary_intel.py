@@ -1,11 +1,11 @@
 """
 Tests for salary_intel.py — pure BLS data lookups, no network calls.
 """
-import pytest
-from salary_intel import estimate, match_role, city_mult, SALARY_DATA
 
+from salary_intel import SALARY_DATA, city_mult, estimate, match_role
 
 # ── match_role ────────────────────────────────────────────────────────────────
+
 
 class TestMatchRole:
     def test_exact_key_match(self):
@@ -40,6 +40,7 @@ class TestMatchRole:
 
 # ── city_mult ─────────────────────────────────────────────────────────────────
 
+
 class TestCityMult:
     def test_san_francisco_above_one(self):
         mult = city_mult("san francisco")
@@ -65,6 +66,7 @@ class TestCityMult:
 
 # ── estimate ─────────────────────────────────────────────────────────────────
 
+
 class TestEstimate:
     def test_known_role_returns_dict(self):
         result = estimate("data analyst", "charlotte", 2)
@@ -80,12 +82,12 @@ class TestEstimate:
         assert result["p10"] <= result["p25"] <= result["p50"] <= result["p75"] <= result["p90"]
 
     def test_city_multiplier_applied(self):
-        base   = estimate("data analyst", "wichita falls", 2)  # small city → mult ~1.0
-        sf     = estimate("data analyst", "san francisco", 2)
+        base = estimate("data analyst", "wichita falls", 2)  # small city → mult ~1.0
+        sf = estimate("data analyst", "san francisco", 2)
         assert sf["p50"] > base["p50"], "SF salary should exceed average"
 
     def test_experience_senior_higher_than_entry(self):
-        entry  = estimate("financial analyst", "new york", 0)
+        entry = estimate("financial analyst", "new york", 0)
         senior = estimate("financial analyst", "new york", 8)
         assert senior["p50"] >= entry["p50"]
 

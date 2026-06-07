@@ -3,20 +3,21 @@ db.py — Dual-mode database layer.
 Uses PostgreSQL (Neon/Supabase via DATABASE_URL env var) on cloud, SQLite locally.
 All database files import from here to get the right connection and helpers.
 """
+
 import os
 import re
 import sqlite3
-import threading
 from pathlib import Path
 
 DATABASE_URL: str = os.getenv("DATABASE_URL", "")
-IS_POSTGRES: bool  = DATABASE_URL.startswith(("postgresql://", "postgres://"))
+IS_POSTGRES: bool = DATABASE_URL.startswith(("postgresql://", "postgres://"))
 
 # SQL placeholder — use db.P in all parameterized queries
 P: str = "%s" if IS_POSTGRES else "?"
 
 
 # ── SQL translation ────────────────────────────────────────────────
+
 
 def _pg_query(sql: str) -> str:
     """Translate SQLite query syntax → PostgreSQL."""
@@ -31,13 +32,16 @@ def _pg_query(sql: str) -> str:
 def _pg_schema(sql: str) -> str:
     """Translate CREATE TABLE DDL from SQLite → PostgreSQL."""
     sql = _pg_query(sql)
-    sql = re.sub(r"\bINTEGER\s+PRIMARY\s+KEY\s+AUTOINCREMENT\b", "SERIAL PRIMARY KEY", sql, flags=re.I)
+    sql = re.sub(
+        r"\bINTEGER\s+PRIMARY\s+KEY\s+AUTOINCREMENT\b", "SERIAL PRIMARY KEY", sql, flags=re.I
+    )
     sql = re.sub(r"\bINTEGER\s+PRIMARY\s+KEY\b", "SERIAL PRIMARY KEY", sql, flags=re.I)
     sql = re.sub(r"datetime\('now'\)", "NOW()", sql, flags=re.I)
     return sql
 
 
 # ── PostgreSQL wrapper ─────────────────────────────────────────────
+
 
 class _WrappedCursor:
     """Wraps psycopg2 RealDictCursor — fetchone/fetchall return plain dicts."""
@@ -70,6 +74,7 @@ class _PGConn:
     def __init__(self):
         import psycopg2
         import psycopg2.extras
+
         self._raw = psycopg2.connect(DATABASE_URL)
         self._raw.autocommit = False
         self._factory = psycopg2.extras.RealDictCursor
@@ -90,23 +95,31 @@ class _PGConn:
         row = cur.fetchone()
         return row["id"] if row else None
 
-    def commit(self):   self._raw.commit()
-    def rollback(self): self._raw.rollback()
-    def close(self):    self._raw.close()
+    def commit(self):
+        self._raw.commit()
+
+    def rollback(self):
+        self._raw.rollback()
+
+    def close(self):
+        self._raw.close()
 
     def __enter__(self):
         return self
 
     def __exit__(self, exc_type, *_):
         if exc_type:
-            try: self.rollback()
-            except Exception: pass
+            try:
+                self.rollback()
+            except Exception:
+                pass
         else:
             self.commit()
         self.close()
 
 
 # ── Public API ─────────────────────────────────────────────────────
+
 
 def connect(sqlite_path: str | Path | None = None):
     """
@@ -145,11 +158,18 @@ def create_table(conn, sql: str):
         conn.execute(sql)
 
 
+_IDENT_RE = re.compile(r"^[A-Za-z_][A-Za-z0-9_]{0,62}$")
+
+
 def add_column_if_missing(conn, table: str, column: str, definition: str):
     """
     ALTER TABLE … ADD COLUMN, safe to run even if the column already exists.
     Uses IF NOT EXISTS on PostgreSQL; try/except on SQLite.
+    table and column are validated against a strict identifier whitelist —
+    DDL cannot be parameterized, so we guard the call site instead.
     """
+    if not _IDENT_RE.match(table) or not _IDENT_RE.match(column):
+        raise ValueError(f"Unsafe identifier in add_column_if_missing: {table!r}.{column!r}")
     if IS_POSTGRES:
         conn.execute(f"ALTER TABLE {table} ADD COLUMN IF NOT EXISTS {column} {definition}")
     else:

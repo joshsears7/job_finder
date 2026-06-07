@@ -20,14 +20,16 @@
 | Feature | Description |
 |---|---|
 | **Resume Scoring** | Parses uploaded PDFs/DOCX and scores against 53+ signals — keyword density, action verbs, quantification, ATS formatting |
+| **Bullet Coach + Rewriter** | Scores every resume bullet, flags weak verbs and missing metrics, and rewrites them with Claude in one click |
 | **Semantic Job Matching** | ChromaDB vector search finds jobs that match your *actual experience*, not just keyword overlap |
 | **Apply Engine** | One-click package: ATS scan, tailored cover letter, targeted resume bullets, and a post-interview thank-you note |
 | **LinkedIn Optimizer** | Scores your LinkedIn profile, rewrites your headline/about/skills section for target roles |
 | **Writing Suite** | 23 AI-powered writing tools — cold outreach, networking emails, salary negotiation, offer comparison |
 | **Interview Prep** | Generates likely questions from the job description; STAR-method story builder |
-| **Application Tracker** | Kanban-style pipeline with follow-up reminders and a built-in networking CRM |
+| **Application Tracker** | Kanban pipeline, AI-drafted follow-up emails, auto-scheduled 7 days after applying, and a networking CRM |
 | **Market Intelligence** | BLS 10-year projections, FRED economic indicators, live HackerNews hiring signals, salary benchmarks |
-| **Resume A/B Testing** | Track multiple resume versions against real application outcomes |
+| **Company Research** | Agentic Claude dossier — funding, tech stack, culture signals, interview talking points |
+| **Resume A/B Testing** | Track multiple resume versions against real application outcomes with response rate correlation |
 | **Analytics Dashboard** | Session activity, scanner history, application funnel metrics |
 
 ---

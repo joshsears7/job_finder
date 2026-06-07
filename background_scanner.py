@@ -12,24 +12,35 @@ Run via LaunchAgent (auto-installed with setup_scanner.py) or manually:
 Logs each run to scanner_runs table in SQLite.
 """
 
-import os
-import sys
-import time
-import subprocess
 import argparse
 import logging
-from datetime import datetime
+import os
+import signal
+import subprocess
+import sys
+import threading
+import time
+
+_stop_event = threading.Event()
 
 # Add app directory to path so we can import modules
 sys.path.insert(0, os.path.dirname(__file__))
 
 from dotenv import load_dotenv
+
 load_dotenv()
 
-_IS_CLOUD = bool(os.getenv("SPACE_ID") or os.getenv("RAILWAY_ENVIRONMENT"))
+_IS_CLOUD = bool(
+    os.getenv("SPACE_ID")  # HuggingFace Spaces
+    or os.getenv("RAILWAY_ENVIRONMENT")  # Railway
+    or os.getenv("RENDER")  # Render
+    or os.getenv("DYNO")  # Heroku
+    or os.getenv("FLY_APP_NAME")  # Fly.io
+)
 if _IS_CLOUD:
-    logging.basicConfig(stream=sys.stdout, level=logging.INFO,
-                        format="%(asctime)s [SCANNER] %(message)s")
+    logging.basicConfig(
+        stream=sys.stdout, level=logging.INFO, format="%(asctime)s [SCANNER] %(message)s"
+    )
 else:
     logging.basicConfig(
         filename=os.path.join(os.path.dirname(__file__), "scanner.log"),
@@ -39,23 +50,31 @@ else:
 log = logging.getLogger("scanner")
 
 
+def _handle_stop(signum, frame):
+    log.info("Signal %s received — stopping scanner", signum)
+    _stop_event.set()
+
+
 def send_notification(title: str, message: str, subtitle: str = ""):
     """Send a macOS notification via osascript. No-op on non-macOS or cloud environments."""
     if sys.platform != "darwin" or _IS_CLOUD:
         return
     try:
-        _clean = lambda s: s.replace('"', "'").replace("\n", " ").replace("\r", "")
-        script = (
-            f'display notification "{_clean(message)}" with title "{_clean(title)}"'
-            + (f' subtitle "{_clean(subtitle)}"' if subtitle else "")
+
+        def _clean(s):
+            return s.replace('"', "'").replace("\n", " ").replace("\r", "")
+
+        script = f'display notification "{_clean(message)}" with title "{_clean(title)}"' + (
+            f' subtitle "{_clean(subtitle)}"' if subtitle else ""
         )
         subprocess.run(["osascript", "-e", script], timeout=5, capture_output=True)
     except Exception:
         pass
 
 
-def _score_job_fast(resume_text: str, job_description: str, job_title: str,
-                    target_roles: list | None = None) -> int:
+def _score_job_fast(
+    resume_text: str, job_description: str, job_title: str, target_roles: list | None = None
+) -> int:
     """
     Fast keyword-based scoring (no ML model load).
     Adapts keyword pool from target_roles so it works for any profession.
@@ -69,41 +88,126 @@ def _score_job_fast(resume_text: str, job_description: str, job_title: str,
 
     # Universal base keywords present in almost every professional role
     BASE_KEYWORDS = [
-        "communication", "collaboration", "team", "leadership", "project",
-        "management", "strategy", "analytics", "content", "social media",
-        "presentation", "research", "digital", "brand", "marketing",
+        "communication",
+        "collaboration",
+        "team",
+        "leadership",
+        "project",
+        "management",
+        "strategy",
+        "analytics",
+        "content",
+        "social media",
+        "presentation",
+        "research",
+        "digital",
+        "brand",
+        "marketing",
     ]
 
     # Role-specific keyword pools — auto-selected from target_roles
     ROLE_KEYWORD_MAP = {
         "design": [
-            "graphic design", "visual design", "digital design", "brand design",
-            "adobe", "photoshop", "illustrator", "indesign", "premiere",
-            "figma", "sketch", "typography", "layout", "ui", "ux",
-            "web design", "print", "motion", "creative", "portfolio",
-            "branding", "identity", "illustration", "photography", "canva",
-            "after effects", "color", "composition", "mockup", "wireframe",
+            "graphic design",
+            "visual design",
+            "digital design",
+            "brand design",
+            "adobe",
+            "photoshop",
+            "illustrator",
+            "indesign",
+            "premiere",
+            "figma",
+            "sketch",
+            "typography",
+            "layout",
+            "ui",
+            "ux",
+            "web design",
+            "print",
+            "motion",
+            "creative",
+            "portfolio",
+            "branding",
+            "identity",
+            "illustration",
+            "photography",
+            "canva",
+            "after effects",
+            "color",
+            "composition",
+            "mockup",
+            "wireframe",
         ],
         "marketing": [
-            "marketing", "campaign", "seo", "sem", "email marketing", "hubspot",
-            "salesforce", "crm", "google analytics", "paid media", "growth",
-            "conversion", "copywriting", "content marketing", "social media",
-            "influencer", "roi", "a/b testing", "market research",
+            "marketing",
+            "campaign",
+            "seo",
+            "sem",
+            "email marketing",
+            "hubspot",
+            "salesforce",
+            "crm",
+            "google analytics",
+            "paid media",
+            "growth",
+            "conversion",
+            "copywriting",
+            "content marketing",
+            "social media",
+            "influencer",
+            "roi",
+            "a/b testing",
+            "market research",
         ],
         "business": [
-            "business development", "sales", "revenue", "pipeline", "strategy",
-            "operations", "consulting", "finance", "excel", "powerpoint",
-            "international", "entrepreneurship", "startup", "growth", "bd",
+            "business development",
+            "sales",
+            "revenue",
+            "pipeline",
+            "strategy",
+            "operations",
+            "consulting",
+            "finance",
+            "excel",
+            "powerpoint",
+            "international",
+            "entrepreneurship",
+            "startup",
+            "growth",
+            "bd",
         ],
         "tech": [
-            "python", "sql", "javascript", "react", "node", "api", "aws",
-            "data", "machine learning", "software", "engineering", "backend",
-            "frontend", "devops", "cloud", "database",
+            "python",
+            "sql",
+            "javascript",
+            "react",
+            "node",
+            "api",
+            "aws",
+            "data",
+            "machine learning",
+            "software",
+            "engineering",
+            "backend",
+            "frontend",
+            "devops",
+            "cloud",
+            "database",
         ],
         "communications": [
-            "communications", "pr", "public relations", "media relations",
-            "press release", "journalism", "writing", "editing", "storytelling",
-            "crisis communications", "internal communications", "copywriting",
+            "communications",
+            "pr",
+            "public relations",
+            "media relations",
+            "press release",
+            "journalism",
+            "writing",
+            "editing",
+            "storytelling",
+            "crisis communications",
+            "internal communications",
+            "copywriting",
         ],
     }
 
@@ -122,8 +226,8 @@ def _score_job_fast(resume_text: str, job_description: str, job_title: str,
     keywords = list(set(keywords))
 
     resume_hits = [kw for kw in keywords if kw in resume_lower]
-    jd_hits     = [kw for kw in keywords if kw in jd_lower]
-    overlap     = set(resume_hits) & set(jd_hits)
+    jd_hits = [kw for kw in keywords if kw in jd_lower]
+    overlap = set(resume_hits) & set(jd_hits)
 
     if not jd_hits:
         return 38
@@ -148,8 +252,18 @@ def _score_job_fast(resume_text: str, job_description: str, job_title: str,
             score = min(100, score + 12)
 
     # Entry-level / new grad boost
-    if any(w in jd_lower for w in ["entry level", "new grad", "recent grad",
-                                    "junior", "associate", "0-2 years", "1-2 years"]):
+    if any(
+        w in jd_lower
+        for w in [
+            "entry level",
+            "new grad",
+            "recent grad",
+            "junior",
+            "associate",
+            "0-2 years",
+            "1-2 years",
+        ]
+    ):
         score = min(100, score + 8)
 
     return max(0, min(100, score))
@@ -170,12 +284,13 @@ def run_scan(user_id: int = 1) -> dict:
     profile = profile_store.get_profile(user_id)
     resume_text = profile_store.get_resume_text(user_id)
 
-    roles  = profile.get("target_roles", [])
+    roles = profile.get("target_roles", [])
     cities = profile.get("target_cities", [])
-    threshold   = int(profile.get("auto_save_threshold", 60))
-    fresh_thr   = int(profile.get("fresh_threshold", 72))
+    threshold = int(profile.get("auto_save_threshold", 60))
+    # min score to include in macOS notification (distinct from auto_save_threshold)
+    notify_score_thr = int(profile.get("fresh_threshold", 72))
     notify_fresh = bool(profile.get("notify_on_fresh", True))
-    blacklist   = [c.lower() for c in profile.get("blacklist_companies", [])]
+    blacklist = [c.lower() for c in profile.get("blacklist_companies", [])]
 
     if not roles:
         log.info("No target roles configured — skipping scan")
@@ -189,26 +304,71 @@ def run_scan(user_id: int = 1) -> dict:
     # US-only cities trigger a strict geography check
     _us_only = (
         target_cities_lower
-        and all(c not in ("london","dublin","amsterdam","berlin","paris","toronto","stockholm","barcelona","milan","zurich","remote","") for c in target_cities_lower)
-        and not any(c in target_countries for c in ["uk","ireland","netherlands","germany","france","canada"])
+        and all(
+            c
+            not in (
+                "london",
+                "dublin",
+                "amsterdam",
+                "berlin",
+                "paris",
+                "toronto",
+                "stockholm",
+                "barcelona",
+                "milan",
+                "zurich",
+                "remote",
+                "",
+            )
+            for c in target_cities_lower
+        )
+        and not any(
+            c in target_countries
+            for c in ["uk", "ireland", "netherlands", "germany", "france", "canada"]
+        )
     )
 
     def _location_ok(job: dict) -> bool:
         """Return False if this job is clearly in the wrong geography."""
         loc = (job.get("location") or "").lower()
-        src = (job.get("source") or "").lower()
         # Always allow remote if user is open to it
         if open_to_remote and any(w in loc for w in ["remote", "worldwide", "anywhere"]):
             return True
         # If we know user is US-only, reject clearly non-US locations
         if _us_only:
             non_us_signals = [
-                "germany", "deutschland", "berlin", "munich", "hamburg", "frankfurt",
-                "london", "uk", "amsterdam", "netherlands", "paris", "france",
-                "toronto", "canada", "dublin", "ireland", "stockholm", "sweden",
-                "barcelona", "spain", "milan", "italy", "zurich", "switzerland",
-                "singapore", "australia", "india", "israel", "latam", "asia",
-                "europe", "emea",
+                "germany",
+                "deutschland",
+                "berlin",
+                "munich",
+                "hamburg",
+                "frankfurt",
+                "london",
+                "uk",
+                "amsterdam",
+                "netherlands",
+                "paris",
+                "france",
+                "toronto",
+                "canada",
+                "dublin",
+                "ireland",
+                "stockholm",
+                "sweden",
+                "barcelona",
+                "spain",
+                "milan",
+                "italy",
+                "zurich",
+                "switzerland",
+                "singapore",
+                "australia",
+                "india",
+                "israel",
+                "latam",
+                "asia",
+                "europe",
+                "emea",
             ]
             if any(sig in loc for sig in non_us_signals):
                 return False
@@ -224,13 +384,13 @@ def run_scan(user_id: int = 1) -> dict:
     scan_cities = cities[:6] if cities else [""]  # limit per run
 
     # Charlotte-only design users: run charlotte_jobs directly for richer local results
-    is_charlotte_designer = (
-        target_cities_lower == ["charlotte"]
-        and any("design" in r.lower() or "creative" in r.lower() or "graphic" in r.lower() for r in roles)
+    is_charlotte_designer = target_cities_lower == ["charlotte"] and any(
+        "design" in r.lower() or "creative" in r.lower() or "graphic" in r.lower() for r in roles
     )
     if is_charlotte_designer:
         try:
             from charlotte_jobs import fetch_all_charlotte_design_jobs
+
             clt_jobs = fetch_all_charlotte_design_jobs(target_roles=roles[:5])
             jobs_found += len(clt_jobs)
             for j in clt_jobs:
@@ -239,14 +399,16 @@ def run_scan(user_id: int = 1) -> dict:
                 company_lower = (j.get("company") or "").lower()
                 if any(bl in company_lower for bl in blacklist):
                     continue
-                score = _score_job_fast(resume_text, j.get("description", ""), j.get("title", ""), target_roles=roles)
+                score = _score_job_fast(
+                    resume_text, j.get("description", ""), j.get("title", ""), target_roles=roles
+                )
                 j["score"] = score
                 if score >= threshold:
                     saved = tracker.save_job(j, score)
                     if saved:
                         jobs_saved += 1
                         log.info(f"Saved [Charlotte]: {j['title']} @ {j['company']} ({score}%)")
-                        if score >= fresh_thr:
+                        if score >= notify_score_thr:
                             top_jobs.append(j)
                             jobs_notified += 1
         except Exception as e:
@@ -271,7 +433,12 @@ def run_scan(user_id: int = 1) -> dict:
                     if tracker.is_saved(j["id"]):
                         continue
 
-                    score = _score_job_fast(resume_text, j.get("description",""), j.get("title",""), target_roles=roles)
+                    score = _score_job_fast(
+                        resume_text,
+                        j.get("description", ""),
+                        j.get("title", ""),
+                        target_roles=roles,
+                    )
                     j["score"] = score
 
                     if score >= threshold:
@@ -280,7 +447,7 @@ def run_scan(user_id: int = 1) -> dict:
                             jobs_saved += 1
                             log.info(f"Saved: {j['title']} @ {j['company']} ({score}%)")
 
-                            if score >= fresh_thr:
+                            if score >= notify_score_thr:
                                 top_jobs.append(j)
                                 jobs_notified += 1
 
@@ -297,7 +464,7 @@ def run_scan(user_id: int = 1) -> dict:
             send_notification(
                 "CareerIQ — New Match",
                 f"{j['title']} at {j['company']}",
-                subtitle=f"{j.get('score',0)}% fit · {j.get('location','')}",
+                subtitle=f"{j.get('score', 0)}% fit · {j.get('location', '')}",
             )
         else:
             send_notification(
@@ -322,41 +489,50 @@ def run_scan(user_id: int = 1) -> dict:
         user_id=user_id,
     )
 
-    log.info(f"Scan complete — found={jobs_found} saved={jobs_saved} notified={jobs_notified} ({duration}s)")
+    log.info(
+        f"Scan complete — found={jobs_found} saved={jobs_saved} notified={jobs_notified} ({duration}s)"
+    )
     return {
-        "jobs_found":    jobs_found,
-        "jobs_saved":    jobs_saved,
+        "jobs_found": jobs_found,
+        "jobs_saved": jobs_saved,
         "jobs_notified": jobs_notified,
-        "duration":      duration,
-        "top_jobs":      top_jobs,
+        "duration": duration,
+        "top_jobs": top_jobs,
     }
 
 
 def watch_loop(user_id: int = 1):
     """Run scan in a loop using the interval set in the user profile."""
+    signal.signal(signal.SIGTERM, _handle_stop)
+    signal.signal(signal.SIGINT, _handle_stop)
+
     import profile_store
+
     profile = profile_store.get_profile(user_id)
     interval_hours = float(profile.get("scan_interval_hours", 4))
-    interval_secs  = interval_hours * 3600
+    interval_secs = interval_hours * 3600
     log.info(f"Watch mode: scanning every {interval_hours}h")
-    while True:
+    while not _stop_event.is_set():
         try:
             run_scan(user_id)
         except Exception as e:
             log.error(f"Scan failed: {e}")
-        time.sleep(interval_secs)
+        _stop_event.wait(timeout=interval_secs)
+    log.info("Scanner stopped cleanly")
 
 
 if __name__ == "__main__":
     parser = argparse.ArgumentParser(description="CareerIQ background scanner")
-    parser.add_argument("--watch",   action="store_true", help="Loop continuously")
-    parser.add_argument("--user-id", type=int, default=1,  help="User ID to scan for")
+    parser.add_argument("--watch", action="store_true", help="Loop continuously")
+    parser.add_argument("--user-id", type=int, default=1, help="User ID to scan for")
     args = parser.parse_args()
 
     if args.watch:
         watch_loop(args.user_id)
     else:
         result = run_scan(args.user_id)
-        print(f"Scan complete: {result.get('jobs_found',0)} found, "
-              f"{result.get('jobs_saved',0)} saved, "
-              f"{result.get('jobs_notified',0)} notified")
+        print(
+            f"Scan complete: {result.get('jobs_found', 0)} found, "
+            f"{result.get('jobs_saved', 0)} saved, "
+            f"{result.get('jobs_notified', 0)} notified"
+        )

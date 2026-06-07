@@ -1,5 +1,6 @@
 import os
 import re
+
 import requests
 from dotenv import load_dotenv
 
@@ -27,9 +28,11 @@ def _index_jobs_async(jobs: list) -> None:
     """Index fetched jobs into ChromaDB in a background thread. Never raises."""
     if not jobs:
         return
+
     def _do():
         try:
             from vector_store import index_job
+
             for j in jobs:
                 if j.get("description", "").strip():
                     index_job(
@@ -42,7 +45,9 @@ def _index_jobs_async(jobs: list) -> None:
                     )
         except Exception:
             pass
+
     import threading
+
     threading.Thread(target=_do, daemon=True).start()
 
 
@@ -67,8 +72,8 @@ def _dedup_jobs(jobs: list[dict]) -> list[dict]:
     for job in jobs:
         is_dup = False
         for i, existing in enumerate(kept):
-            co_sim    = _sim(existing.get("company", ""), job.get("company", ""))
-            title_sim = _sim(existing.get("title",   ""), job.get("title",   ""))
+            co_sim = _sim(existing.get("company", ""), job.get("company", ""))
+            title_sim = _sim(existing.get("title", ""), job.get("title", ""))
             if co_sim >= 0.80 and title_sim >= 0.75:
                 # Keep whichever has salary data; otherwise keep first seen
                 if job.get("salary_min") and not existing.get("salary_min"):
@@ -86,33 +91,33 @@ ADZUNA_APP_KEY = os.getenv("ADZUNA_APP_KEY", "")
 # City presets → Adzuna country code + display label
 CITY_PRESETS = {
     # ── Domestic ──────────────────────────────────────────────
-    "🗽 New York":        {"where": "New York",       "country": "us", "flag": "🇺🇸"},
-    "🌲 Raleigh":         {"where": "Raleigh",        "country": "us", "flag": "🇺🇸"},
-    "🏙️ Charlotte":      {"where": "Charlotte",      "country": "us", "flag": "🇺🇸"},
-    "🏛️ Washington DC":  {"where": "Washington DC",  "country": "us", "flag": "🇺🇸"},
-    "🏙️ Chicago":        {"where": "Chicago",        "country": "us", "flag": "🇺🇸"},
-    "🌴 Los Angeles":     {"where": "Los Angeles",    "country": "us", "flag": "🇺🇸"},
-    "🌉 San Francisco":   {"where": "San Francisco",  "country": "us", "flag": "🇺🇸"},
-    "🌞 Miami":           {"where": "Miami",          "country": "us", "flag": "🇺🇸"},
-    "🏔️ Atlanta":        {"where": "Atlanta",        "country": "us", "flag": "🇺🇸"},
-    "🤠 Dallas":          {"where": "Dallas",         "country": "us", "flag": "🇺🇸"},
-    "🚀 Houston":         {"where": "Houston",        "country": "us", "flag": "🇺🇸"},
-    "🐟 Seattle":         {"where": "Seattle",        "country": "us", "flag": "🇺🇸"},
-    "🦞 Boston":          {"where": "Boston",         "country": "us", "flag": "🇺🇸"},
-    "🏔️ Denver":         {"where": "Denver",         "country": "us", "flag": "🇺🇸"},
-    "🎵 Nashville":       {"where": "Nashville",      "country": "us", "flag": "🇺🇸"},
-    "🌍 Remote":          {"where": "",               "country": "us", "flag": "🌍"},
+    "🗽 New York": {"where": "New York", "country": "us", "flag": "🇺🇸"},
+    "🌲 Raleigh": {"where": "Raleigh", "country": "us", "flag": "🇺🇸"},
+    "🏙️ Charlotte": {"where": "Charlotte", "country": "us", "flag": "🇺🇸"},
+    "🏛️ Washington DC": {"where": "Washington DC", "country": "us", "flag": "🇺🇸"},
+    "🏙️ Chicago": {"where": "Chicago", "country": "us", "flag": "🇺🇸"},
+    "🌴 Los Angeles": {"where": "Los Angeles", "country": "us", "flag": "🇺🇸"},
+    "🌉 San Francisco": {"where": "San Francisco", "country": "us", "flag": "🇺🇸"},
+    "🌞 Miami": {"where": "Miami", "country": "us", "flag": "🇺🇸"},
+    "🏔️ Atlanta": {"where": "Atlanta", "country": "us", "flag": "🇺🇸"},
+    "🤠 Dallas": {"where": "Dallas", "country": "us", "flag": "🇺🇸"},
+    "🚀 Houston": {"where": "Houston", "country": "us", "flag": "🇺🇸"},
+    "🐟 Seattle": {"where": "Seattle", "country": "us", "flag": "🇺🇸"},
+    "🦞 Boston": {"where": "Boston", "country": "us", "flag": "🇺🇸"},
+    "🏔️ Denver": {"where": "Denver", "country": "us", "flag": "🇺🇸"},
+    "🎵 Nashville": {"where": "Nashville", "country": "us", "flag": "🇺🇸"},
+    "🌍 Remote": {"where": "", "country": "us", "flag": "🌍"},
     # ── International ─────────────────────────────────────────
-    "🇬🇧 London":        {"where": "London",         "country": "gb", "flag": "🇬🇧"},
-    "🇳🇱 Amsterdam":     {"where": "Amsterdam",      "country": "nl", "flag": "🇳🇱"},
-    "🇮🇹 Milan":         {"where": "Milan",          "country": "it", "flag": "🇮🇹"},
-    "🇩🇪 Berlin":        {"where": "Berlin",         "country": "de", "flag": "🇩🇪"},
-    "🇫🇷 Paris":         {"where": "Paris",          "country": "fr", "flag": "🇫🇷"},
-    "🇨🇦 Toronto":       {"where": "Toronto",        "country": "ca", "flag": "🇨🇦"},
-    "🇮🇪 Dublin":        {"where": "Dublin",         "country": "ie", "flag": "🇮🇪"},
-    "🇨🇭 Zurich":        {"where": "Zurich",         "country": "ch", "flag": "🇨🇭"},
-    "🇸🇪 Stockholm":     {"where": "Stockholm",      "country": "se", "flag": "🇸🇪"},
-    "🇪🇸 Barcelona":     {"where": "Barcelona",      "country": "es", "flag": "🇪🇸"},
+    "🇬🇧 London": {"where": "London", "country": "gb", "flag": "🇬🇧"},
+    "🇳🇱 Amsterdam": {"where": "Amsterdam", "country": "nl", "flag": "🇳🇱"},
+    "🇮🇹 Milan": {"where": "Milan", "country": "it", "flag": "🇮🇹"},
+    "🇩🇪 Berlin": {"where": "Berlin", "country": "de", "flag": "🇩🇪"},
+    "🇫🇷 Paris": {"where": "Paris", "country": "fr", "flag": "🇫🇷"},
+    "🇨🇦 Toronto": {"where": "Toronto", "country": "ca", "flag": "🇨🇦"},
+    "🇮🇪 Dublin": {"where": "Dublin", "country": "ie", "flag": "🇮🇪"},
+    "🇨🇭 Zurich": {"where": "Zurich", "country": "ch", "flag": "🇨🇭"},
+    "🇸🇪 Stockholm": {"where": "Stockholm", "country": "se", "flag": "🇸🇪"},
+    "🇪🇸 Barcelona": {"where": "Barcelona", "country": "es", "flag": "🇪🇸"},
 }
 
 
@@ -122,6 +127,7 @@ def _strip_html(html):
 
 
 # ── Adzuna ───────────────────────────────────────────────────────
+
 
 def fetch_adzuna(role, where="", country="us", num_results=20):
     if not (ADZUNA_APP_ID and ADZUNA_APP_KEY):
@@ -140,19 +146,21 @@ def fetch_adzuna(role, where="", country="us", num_results=20):
         r.raise_for_status()
         jobs = []
         for j in r.json().get("results", []):
-            jobs.append({
-                "id": f"az_{j.get('id', '')}",
-                "title": j.get("title", ""),
-                "company": j.get("company", {}).get("display_name", "Unknown"),
-                "location": j.get("location", {}).get("display_name", where or country.upper()),
-                "salary_min": j.get("salary_min"),
-                "salary_max": j.get("salary_max"),
-                "description": j.get("description", ""),
-                "url": j.get("redirect_url", ""),
-                "source": "Adzuna",
-                "date": (j.get("created") or "")[:10],
-                "country": country,
-            })
+            jobs.append(
+                {
+                    "id": f"az_{j.get('id', '')}",
+                    "title": j.get("title", ""),
+                    "company": j.get("company", {}).get("display_name", "Unknown"),
+                    "location": j.get("location", {}).get("display_name", where or country.upper()),
+                    "salary_min": j.get("salary_min"),
+                    "salary_max": j.get("salary_max"),
+                    "description": j.get("description", ""),
+                    "url": j.get("redirect_url", ""),
+                    "source": "Adzuna",
+                    "date": (j.get("created") or "")[:10],
+                    "country": country,
+                }
+            )
         return jobs
     except Exception as e:
         _warn("Adzuna", str(e))
@@ -162,8 +170,12 @@ def fetch_adzuna(role, where="", country="us", num_results=20):
 # ── Jobicy ───────────────────────────────────────────────────────
 
 _JOBICY_GEO = {
-    "us": "USA", "gb": "UK", "nl": "Netherlands",
-    "it": "Italy", "de": "Germany", "fr": "France",
+    "us": "USA",
+    "gb": "UK",
+    "nl": "Netherlands",
+    "it": "Italy",
+    "de": "Germany",
+    "fr": "France",
 }
 
 
@@ -179,19 +191,21 @@ def fetch_jobicy(role, country="", num_results=20):
         jobs = []
         for j in r.json().get("jobs", [])[:num_results]:
             desc = _strip_html(j.get("jobDescription", j.get("jobExcerpt", "")))
-            jobs.append({
-                "id": f"jc_{j.get('id', '')}",
-                "title": j.get("jobTitle", ""),
-                "company": j.get("companyName", "Unknown"),
-                "location": j.get("jobGeo") or "Remote",
-                "salary_min": None,
-                "salary_max": None,
-                "description": desc,
-                "url": j.get("url", ""),
-                "source": "Jobicy",
-                "date": (j.get("pubDate") or "")[:10],
-                "country": country,
-            })
+            jobs.append(
+                {
+                    "id": f"jc_{j.get('id', '')}",
+                    "title": j.get("jobTitle", ""),
+                    "company": j.get("companyName", "Unknown"),
+                    "location": j.get("jobGeo") or "Remote",
+                    "salary_min": None,
+                    "salary_max": None,
+                    "description": desc,
+                    "url": j.get("url", ""),
+                    "source": "Jobicy",
+                    "date": (j.get("pubDate") or "")[:10],
+                    "country": country,
+                }
+            )
         return jobs
     except Exception as e:
         _warn("Jobicy", str(e))
@@ -199,6 +213,7 @@ def fetch_jobicy(role, country="", num_results=20):
 
 
 # ── The Muse ─────────────────────────────────────────────────────
+
 
 def fetch_muse(role, num_results=15):
     url = "https://www.themuse.com/api/public/jobs"
@@ -224,24 +239,26 @@ def fetch_muse(role, num_results=15):
         desc = _strip_html(j.get("contents", ""))
         # Require all keywords in title OR all keywords in description (strict match)
         title_match = not keywords or all(kw in title for kw in keywords)
-        desc_match  = not keywords or all(kw in desc.lower() for kw in keywords)
+        desc_match = not keywords or all(kw in desc.lower() for kw in keywords)
         if not (title_match or desc_match):
             continue
         locs = j.get("locations", [])
         loc = locs[0].get("name", "Remote") if locs else "Remote"
-        jobs.append({
-            "id": f"mu_{j.get('id', '')}",
-            "title": j.get("name", ""),
-            "company": j.get("company", {}).get("name", "Unknown"),
-            "location": loc,
-            "salary_min": None,
-            "salary_max": None,
-            "description": desc,
-            "url": j.get("refs", {}).get("landing_page", ""),
-            "source": "The Muse",
-            "date": (j.get("publication_date") or "")[:10],
-            "country": "us",
-        })
+        jobs.append(
+            {
+                "id": f"mu_{j.get('id', '')}",
+                "title": j.get("name", ""),
+                "company": j.get("company", {}).get("name", "Unknown"),
+                "location": loc,
+                "salary_min": None,
+                "salary_max": None,
+                "description": desc,
+                "url": j.get("refs", {}).get("landing_page", ""),
+                "source": "The Muse",
+                "date": (j.get("publication_date") or "")[:10],
+                "country": "us",
+            }
+        )
         if len(jobs) >= num_results:
             break
     return jobs
@@ -250,13 +267,24 @@ def fetch_muse(role, num_results=15):
 # ── Remotive ─────────────────────────────────────────────────────
 
 _REMOTIVE_CATEGORY = {
-    "software": "software-dev", "engineer": "software-dev", "developer": "software-dev",
-    "data": "data", "analyst": "data", "scientist": "data",
-    "product": "product", "design": "design", "ux": "design",
-    "marketing": "marketing", "sales": "sales", "finance": "finance",
-    "hr": "human-resources", "recruiter": "human-resources",
-    "devops": "devops-sysadmin", "security": "cybersecurity",
-    "management": "management-finance", "project": "project-management",
+    "software": "software-dev",
+    "engineer": "software-dev",
+    "developer": "software-dev",
+    "data": "data",
+    "analyst": "data",
+    "scientist": "data",
+    "product": "product",
+    "design": "design",
+    "ux": "design",
+    "marketing": "marketing",
+    "sales": "sales",
+    "finance": "finance",
+    "hr": "human-resources",
+    "recruiter": "human-resources",
+    "devops": "devops-sysadmin",
+    "security": "cybersecurity",
+    "management": "management-finance",
+    "project": "project-management",
 }
 
 
@@ -274,7 +302,9 @@ def fetch_remotive(role, num_results=15):
             "https://remotive.com/api/remote-jobs",
             params=params,
             timeout=10,
-            headers={"User-Agent": "Mozilla/5.0 (Macintosh; Intel Mac OS X 10_15_7) AppleWebKit/537.36"},
+            headers={
+                "User-Agent": "Mozilla/5.0 (Macintosh; Intel Mac OS X 10_15_7) AppleWebKit/537.36"
+            },
         )
         r.raise_for_status()
         jobs = []
@@ -285,25 +315,27 @@ def fetch_remotive(role, num_results=15):
             # Capture K suffix explicitly so "$500K" → 500,000 (not 500)
             m = re.search(r"\$?([\d,]+)([kK])?\s*[-–]\s*\$?([\d,]+)([kK])?", sal_str)
             if m:
-                lo    = float(m.group(1).replace(",", ""))
-                hi    = float(m.group(3).replace(",", ""))
-                lo_k  = bool(m.group(2))
-                hi_k  = bool(m.group(4))
+                lo = float(m.group(1).replace(",", ""))
+                hi = float(m.group(3).replace(",", ""))
+                lo_k = bool(m.group(2))
+                hi_k = bool(m.group(4))
                 sal_min = lo * 1000 if (lo_k or lo < 500) else lo
                 sal_max = hi * 1000 if (hi_k or hi < 500) else hi
-            jobs.append({
-                "id":          f"rm_{j.get('id', '')}",
-                "title":       j.get("title", ""),
-                "company":     j.get("company_name", "Unknown"),
-                "location":    j.get("candidate_required_location") or "Remote",
-                "salary_min":  sal_min,
-                "salary_max":  sal_max,
-                "description": desc[:2000],
-                "url":         j.get("url", ""),
-                "source":      "Remotive",
-                "date":        (j.get("publication_date") or "")[:10],
-                "country":     "us",
-            })
+            jobs.append(
+                {
+                    "id": f"rm_{j.get('id', '')}",
+                    "title": j.get("title", ""),
+                    "company": j.get("company_name", "Unknown"),
+                    "location": j.get("candidate_required_location") or "Remote",
+                    "salary_min": sal_min,
+                    "salary_max": sal_max,
+                    "description": desc[:2000],
+                    "url": j.get("url", ""),
+                    "source": "Remotive",
+                    "date": (j.get("publication_date") or "")[:10],
+                    "country": "us",
+                }
+            )
         return jobs
     except Exception as e:
         _warn("Remotive", str(e))
@@ -312,13 +344,16 @@ def fetch_remotive(role, num_results=15):
 
 # ── Arbeitnow ─────────────────────────────────────────────────────
 
+
 def fetch_arbeitnow(role, num_results=15):
     """European & remote jobs from Arbeitnow — free, no API key required."""
     try:
         r = requests.get(
             "https://www.arbeitnow.com/api/job-board-api",
             timeout=10,
-            headers={"User-Agent": "Mozilla/5.0 (Macintosh; Intel Mac OS X 10_15_7) AppleWebKit/537.36"},
+            headers={
+                "User-Agent": "Mozilla/5.0 (Macintosh; Intel Mac OS X 10_15_7) AppleWebKit/537.36"
+            },
         )
         r.raise_for_status()
         jobs = []
@@ -326,8 +361,8 @@ def fetch_arbeitnow(role, num_results=15):
         kw = [w for w in role.lower().split() if len(w) > 2]
         for j in r.json().get("data", []):
             title = j.get("title", "").lower()
-            tags  = " ".join(j.get("tags", [])).lower()
-            desc  = _strip_html(j.get("description", "")).lower()
+            tags = " ".join(j.get("tags", [])).lower()
+            desc = _strip_html(j.get("description", "")).lower()
             combined = title + " " + tags
             if kw:
                 # Require all keywords in title+tags OR at least 2 in description
@@ -339,19 +374,21 @@ def fetch_arbeitnow(role, num_results=15):
             loc = j.get("location", "Remote")
             if j.get("remote"):
                 loc = "Remote" if loc == "" else f"{loc} / Remote"
-            jobs.append({
-                "id":          f"an_{j.get('slug', j.get('title','')[:20])}",
-                "title":       j.get("title", ""),
-                "company":     j.get("company_name", "Unknown"),
-                "location":    loc,
-                "salary_min":  None,
-                "salary_max":  None,
-                "description": desc[:2000],
-                "url":         j.get("url", ""),
-                "source":      "Arbeitnow",
-                "date":        str(j.get("created_at") or "")[:10],
-                "country":     "eu",
-            })
+            jobs.append(
+                {
+                    "id": f"an_{j.get('slug', j.get('title', '')[:20])}",
+                    "title": j.get("title", ""),
+                    "company": j.get("company_name", "Unknown"),
+                    "location": loc,
+                    "salary_min": None,
+                    "salary_max": None,
+                    "description": desc[:2000],
+                    "url": j.get("url", ""),
+                    "source": "Arbeitnow",
+                    "date": str(j.get("created_at") or "")[:10],
+                    "country": "eu",
+                }
+            )
             if len(jobs) >= num_results:
                 break
         return jobs
@@ -361,6 +398,7 @@ def fetch_arbeitnow(role, num_results=15):
 
 
 # ── JSearch (RapidAPI) ──────────────────────────────────────────
+
 
 def fetch_jsearch(role: str, location: str = "", num_results: int = 15) -> list[dict]:
     """
@@ -375,7 +413,7 @@ def fetch_jsearch(role: str, location: str = "", num_results: int = 15) -> list[
         r = requests.get(
             "https://jsearch.p.rapidapi.com/search",
             headers={
-                "X-RapidAPI-Key":  key,
+                "X-RapidAPI-Key": key,
                 "X-RapidAPI-Host": "jsearch.p.rapidapi.com",
             },
             params={"query": query, "page": "1", "num_pages": "1"},
@@ -391,19 +429,21 @@ def fetch_jsearch(role: str, location: str = "", num_results: int = 15) -> list[
                 sal_min = sal_min * 2080
                 sal_max = (sal_max or sal_min) * 2080
             loc_parts = filter(None, [j.get("job_city"), j.get("job_state")])
-            jobs.append({
-                "id":          f"js_{j.get('job_id', '')}",
-                "title":       j.get("job_title", ""),
-                "company":     j.get("employer_name", "Unknown"),
-                "location":    ", ".join(loc_parts) or location or "Unknown",
-                "salary_min":  sal_min,
-                "salary_max":  sal_max,
-                "description": (j.get("job_description") or "")[:2000],
-                "url":         j.get("job_apply_link") or j.get("job_google_link") or "",
-                "source":      "JSearch",
-                "date":        (j.get("job_posted_at_datetime_utc") or "")[:10],
-                "country":     "us",
-            })
+            jobs.append(
+                {
+                    "id": f"js_{j.get('job_id', '')}",
+                    "title": j.get("job_title", ""),
+                    "company": j.get("employer_name", "Unknown"),
+                    "location": ", ".join(loc_parts) or location or "Unknown",
+                    "salary_min": sal_min,
+                    "salary_max": sal_max,
+                    "description": (j.get("job_description") or "")[:2000],
+                    "url": j.get("job_apply_link") or j.get("job_google_link") or "",
+                    "source": "JSearch",
+                    "date": (j.get("job_posted_at_datetime_utc") or "")[:10],
+                    "country": "us",
+                }
+            )
         return jobs
     except Exception as e:
         _warn("JSearch", str(e))
@@ -411,6 +451,7 @@ def fetch_jsearch(role: str, location: str = "", num_results: int = 15) -> list[
 
 
 # ── Multi-city search ────────────────────────────────────────────
+
 
 def fetch_jobs_multicity(role, selected_cities, num_per_city=10):
     """
@@ -445,6 +486,7 @@ def fetch_jobs_multicity(role, selected_cities, num_per_city=10):
     if "🏙️ Charlotte" in selected_cities:
         try:
             from charlotte_jobs import fetch_all_charlotte_design_jobs
+
             clt_jobs = fetch_all_charlotte_design_jobs(target_roles=[role])
             for j in clt_jobs:
                 j["city_label"] = "🏙️ Charlotte"
@@ -474,6 +516,7 @@ def fetch_jobs_multicity(role, selected_cities, num_per_city=10):
 def fetch_jobs(role, location="", num_results=20):
     """Single-location search — hits all available sources."""
     from concurrent.futures import ThreadPoolExecutor, as_completed
+
     jobs = []
     seen_ids = set()
 
@@ -489,17 +532,18 @@ def fetch_jobs(role, location="", num_results=20):
     if "charlotte" in location.lower():
         try:
             from charlotte_jobs import fetch_all_charlotte_design_jobs
+
             _add(fetch_all_charlotte_design_jobs(target_roles=[role]))
         except Exception as e:
             _warn("Charlotte", str(e))
 
     with ThreadPoolExecutor(max_workers=5) as pool:
         futures = [
-            pool.submit(fetch_jobicy,    role, "",       12),
-            pool.submit(fetch_muse,      role,           10),
-            pool.submit(fetch_remotive,  role,           12),
-            pool.submit(fetch_arbeitnow, role,           10),
-            pool.submit(fetch_jsearch,   role, location, 10),
+            pool.submit(fetch_jobicy, role, "", 12),
+            pool.submit(fetch_muse, role, 10),
+            pool.submit(fetch_remotive, role, 12),
+            pool.submit(fetch_arbeitnow, role, 10),
+            pool.submit(fetch_jsearch, role, location, 10),
         ]
         for f in as_completed(futures):
             try:

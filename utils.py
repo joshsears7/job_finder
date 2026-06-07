@@ -5,25 +5,30 @@ Shared constants, CSS injection, and helper functions used across all
 CareerIQ pages. Import from here rather than app.py.
 """
 
-import os
-import re
 import html as _html
+
 import streamlit as st
 
 import tracker
+
 
 def xe(s) -> str:
     """HTML-escape a value for safe embedding inside unsafe_allow_html blocks."""
     return _html.escape(str(s) if s is not None else "", quote=True)
 
+
 # ── Status constants ──────────────────────────────────────────────
 STATUS_EMOJI = {"saved": "🔖", "applied": "📤", "interview": "🎯", "offer": "🎉", "rejected": "❌"}
 STATUS_COLOR = {
-    "saved": "#64748b", "applied": "#2563eb",
-    "interview": "#7c3aed", "offer": "#059669", "rejected": "#dc2626",
+    "saved": "#64748b",
+    "applied": "#2563eb",
+    "interview": "#7c3aed",
+    "offer": "#059669",
+    "rejected": "#dc2626",
 }
 
 # ── Resume vault (SQLite-backed) ──────────────────────────────────
+
 
 def _load_vault() -> dict:
     """Return {name: {text, score, saved}} from SQLite resume_versions table."""
@@ -55,6 +60,7 @@ def _todays_tasks(apps=None, contacts=None):
     when the caller already fetched them.
     """
     from datetime import date
+
     tasks = []
     try:
         if apps is None:
@@ -66,20 +72,43 @@ def _todays_tasks(apps=None, contacts=None):
             if a["status"] == "applied" and a.get("date_applied"):
                 try:
                     days = (today - date.fromisoformat(a["date_applied"][:10])).days
-                    _co = xe(a['company']); _ti = xe(a['title'])
+                    _co = xe(a["company"])
+                    _ti = xe(a["title"])
                     if days >= 14:
-                        tasks.append(("urgent", f"Follow up — {_co}", f"{_ti} · applied {days}d ago, no response."))
+                        tasks.append(
+                            (
+                                "urgent",
+                                f"Follow up — {_co}",
+                                f"{_ti} · applied {days}d ago, no response.",
+                            )
+                        )
                     elif days >= 7:
-                        tasks.append(("nudge", f"Consider follow-up — {_co}", f"{_ti} · {days}d since applying."))
+                        tasks.append(
+                            (
+                                "nudge",
+                                f"Consider follow-up — {_co}",
+                                f"{_ti} · {days}d since applying.",
+                            )
+                        )
                 except Exception:
                     pass
             elif a["status"] == "interview":
-                tasks.append(("prep", f"Interview prep — {xe(a['company'])}", f"Review questions for {xe(a['title'])}."))
+                tasks.append(
+                    (
+                        "prep",
+                        f"Interview prep — {xe(a['company'])}",
+                        f"Review questions for {xe(a['title'])}.",
+                    )
+                )
         for c in contacts:
             if c.get("next_action") and c.get("status") in ("warm", "hot", "reached out"):
-                tasks.append(("network",
-                              f"Reach out: {xe(c['name'])} @ {xe(c.get('company', ''))}",
-                              xe(c["next_action"])))
+                tasks.append(
+                    (
+                        "network",
+                        f"Reach out: {xe(c['name'])} @ {xe(c.get('company', ''))}",
+                        xe(c["next_action"]),
+                    )
+                )
     except Exception:
         pass
     return tasks[:8]
@@ -92,25 +121,49 @@ def score_color(s):
 
 def score_badge(s, size=72):
     bg = score_color(s)
-    return (f"<div class='score-badge' style='background:{bg};width:{size}px;height:{size}px;"
-            f"font-size:{int(size * 0.3)}px'>{s}%</div>")
+    return (
+        f"<div class='score-badge' style='background:{bg};width:{size}px;height:{size}px;"
+        f"font-size:{int(size * 0.3)}px'>{s}%</div>"
+    )
 
 
 def score_ring(score: int, size: int = 120, show_grade: bool = True) -> str:
     """Animated SVG score ring — draws itself from 0 to score on every page load."""
     circumference = 314.159  # 2π × 50
     clamped = max(0, min(100, score))
-    offset   = circumference * (1 - clamped / 100)
-    color    = "#10b981" if score >= 75 else "#3b82f6" if score >= 60 else "#f59e0b" if score >= 45 else "#ef4444"
-    grade    = "A" if score >= 85 else "B" if score >= 70 else "C" if score >= 55 else "D" if score >= 40 else "F"
-    anim     = f"ciq_ring_{score}_{size}"
+    offset = circumference * (1 - clamped / 100)
+    color = (
+        "#10b981"
+        if score >= 75
+        else "#3b82f6"
+        if score >= 60
+        else "#f59e0b"
+        if score >= 45
+        else "#ef4444"
+    )
+    grade = (
+        "A"
+        if score >= 85
+        else "B"
+        if score >= 70
+        else "C"
+        if score >= 55
+        else "D"
+        if score >= 40
+        else "F"
+    )
+    anim = f"ciq_ring_{score}_{size}"
     fs_score = int(size * 0.22)
     fs_label = int(size * 0.095)
     fs_grade = int(size * 0.155)
     grade_html = (
-        f"<div style='font-size:{fs_grade}px;font-weight:800;color:{color};"
-        f"text-align:center;margin-top:5px'>Grade {grade}</div>"
-    ) if show_grade else ""
+        (
+            f"<div style='font-size:{fs_grade}px;font-weight:800;color:{color};"
+            f"text-align:center;margin-top:5px'>Grade {grade}</div>"
+        )
+        if show_grade
+        else ""
+    )
     return f"""<div style="display:inline-flex;flex-direction:column;align-items:center">
   <div style="position:relative;display:inline-flex;align-items:center;justify-content:center;width:{size}px;height:{size}px">
     <style>
@@ -137,8 +190,10 @@ def chip(label, kind="blue"):
 
 
 def progress_bar(pct, color="#2563eb"):
-    return (f"<div class='prog-wrap'><div class='prog-fill' "
-            f"style='width:{pct}%;background:{color}'></div></div>")
+    return (
+        f"<div class='prog-wrap'><div class='prog-fill' "
+        f"style='width:{pct}%;background:{color}'></div></div>"
+    )
 
 
 def alert(text, kind="blue"):
@@ -148,7 +203,8 @@ def alert(text, kind="blue"):
 # ── CSS injection ────────────────────────────────────────────────
 def inject_css():
     """Inject the full CareerIQ stylesheet. Call once per page."""
-    st.markdown("""
+    st.markdown(
+        """
 <style>
 @import url('https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700;800;900&display=swap');
 
@@ -590,7 +646,9 @@ hr { border:none; border-top:1px solid #111827; margin:1.4rem 0 }
     }
 })();
 </script>
-""", unsafe_allow_html=True)
+""",
+        unsafe_allow_html=True,
+    )
 
 
 # ── Demo resume ───────────────────────────────────────────────────
@@ -625,9 +683,10 @@ Google Analytics Certified · HubSpot Marketing Hub Certified
 
 
 def load_demo_resume():
+    from resume_editor import full_analysis
     from resume_parser import parse_resume
     from scorer import get_model
-    from resume_editor import full_analysis
+
     p = parse_resume(DEMO_RESUME_TEXT)
     p["name"] = "Alex Rivera"
     p["years_experience"] = 3
@@ -639,8 +698,8 @@ def load_demo_resume():
 RESUME_EXAMPLES = {
     "Software Engineer": {
         "summary": "Full-stack software engineer with 4 years building scalable web applications in Python and React. "
-                   "Led migration of monolithic app to microservices, reducing deploy time by 60%. "
-                   "Strong background in system design, CI/CD, and cloud infrastructure (AWS).",
+        "Led migration of monolithic app to microservices, reducing deploy time by 60%. "
+        "Strong background in system design, CI/CD, and cloud infrastructure (AWS).",
         "bullets": [
             "Reduced API latency by 42% by refactoring N+1 database queries and adding Redis caching",
             "Migrated legacy monolith to 12 microservices (Python/FastAPI), cutting deploy time from 45 min → 8 min",
@@ -651,8 +710,8 @@ RESUME_EXAMPLES = {
     },
     "Data Analyst": {
         "summary": "Data analyst with 3 years turning raw business data into decisions at e-commerce and SaaS companies. "
-                   "Proficient in SQL, Python, and Tableau. Built dashboards used daily by executive teams. "
-                   "Known for translating complex findings into clear business narratives.",
+        "Proficient in SQL, Python, and Tableau. Built dashboards used daily by executive teams. "
+        "Known for translating complex findings into clear business narratives.",
         "bullets": [
             "Built executive Tableau dashboard tracking 12 KPIs — used weekly by VP and CMO for budget decisions",
             "Automated weekly reporting pipeline in Python (pandas + SFTP), saving 6 hours of analyst time per week",
@@ -663,8 +722,8 @@ RESUME_EXAMPLES = {
     },
     "Product Manager": {
         "summary": "Product manager with 5 years launching consumer and B2B products at Series A–C startups. "
-                   "Owned roadmap for a $4M ARR SaaS product from 0→1. "
-                   "Skilled at balancing user research, technical constraints, and business strategy.",
+        "Owned roadmap for a $4M ARR SaaS product from 0→1. "
+        "Skilled at balancing user research, technical constraints, and business strategy.",
         "bullets": [
             "Launched mobile onboarding redesign that improved 7-day activation rate from 31% to 54% (A/B tested)",
             "Owned roadmap for billing module — delivered 4 features in Q3 that drove $1.2M in expansion revenue",
@@ -675,8 +734,8 @@ RESUME_EXAMPLES = {
     },
     "Marketing Analyst": {
         "summary": "Marketing analyst with 3 years of experience driving growth through data at D2C and B2B SaaS companies. "
-                   "Specializes in paid acquisition, attribution modeling, and conversion rate optimization. "
-                   "Built reporting infrastructure from scratch at two startups.",
+        "Specializes in paid acquisition, attribution modeling, and conversion rate optimization. "
+        "Built reporting infrastructure from scratch at two startups.",
         "bullets": [
             "Decreased customer acquisition cost by 31% by reallocating paid budget using multi-touch attribution model",
             "Built automated weekly marketing dashboard in Google Data Studio, replacing 5 manual Sheets reports",
@@ -687,7 +746,7 @@ RESUME_EXAMPLES = {
     },
     "Financial Analyst": {
         "summary": "Financial analyst with 4 years of experience in FP&A and investment analysis at a Fortune 500 and a growth-stage PE portfolio company. "
-                   "Built models covering $500M+ in annual budget. CFA Level 2 candidate.",
+        "Built models covering $500M+ in annual budget. CFA Level 2 candidate.",
         "bullets": [
             "Built 5-year rolling forecast model for $120M business unit — adopted as standard by CFO across 3 divisions",
             "Reduced month-end close from 8 days to 4 days by automating variance reporting in Excel VBA",
@@ -698,8 +757,8 @@ RESUME_EXAMPLES = {
     },
     "Project Manager": {
         "summary": "PMP-certified project manager with 6 years delivering enterprise software and infrastructure projects on time and on budget. "
-                   "Managed programs up to $8M across distributed teams of 20+. "
-                   "Known for risk management and stakeholder communication.",
+        "Managed programs up to $8M across distributed teams of 20+. "
+        "Known for risk management and stakeholder communication.",
         "bullets": [
             "Delivered $4.2M ERP implementation 3 weeks ahead of schedule by proactively managing 14 scope risks",
             "Led cross-functional team of 22 (engineering, legal, finance) to launch new client portal — zero downtime",
@@ -710,8 +769,8 @@ RESUME_EXAMPLES = {
     },
     "UX Designer": {
         "summary": "Product designer with 4 years crafting intuitive, accessible experiences for mobile and web applications. "
-                   "Led end-to-end design for products used by 500K+ users. "
-                   "Strong background in user research, prototyping, and cross-functional collaboration with engineering.",
+        "Led end-to-end design for products used by 500K+ users. "
+        "Strong background in user research, prototyping, and cross-functional collaboration with engineering.",
         "bullets": [
             "Redesigned checkout flow in Figma based on 30 user interviews — reduced cart abandonment by 23%",
             "Built and maintained design system with 80+ components, reducing design-to-dev handoff time by 35%",
@@ -722,8 +781,8 @@ RESUME_EXAMPLES = {
     },
     "Account Manager": {
         "summary": "Account manager with 4 years managing enterprise SaaS accounts and growing revenue through expansion and referrals. "
-                   "Consistently exceeded quota (127% average). "
-                   "Skilled at multi-threading complex accounts and turning at-risk customers into advocates.",
+        "Consistently exceeded quota (127% average). "
+        "Skilled at multi-threading complex accounts and turning at-risk customers into advocates.",
         "bullets": [
             "Managed portfolio of 42 enterprise accounts ($3.2M ARR) with 94% retention and 121% net revenue retention",
             "Expanded 8 accounts from starter to enterprise tier — generated $480K in incremental ARR in 12 months",

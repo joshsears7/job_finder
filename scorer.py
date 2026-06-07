@@ -1,28 +1,43 @@
 import re
+
 from resume_parser import COMMON_SKILLS
 
+# Similarity rescaling bounds — floor = near-random, ceiling = near-identical text.
+# Both score_job and batch_score_jobs use these; define once to prevent drift.
+_SIM_FLOOR = 0.15
+_SIM_CEILING = 0.85
+
 _model = None
-_util  = None   # sentence_transformers.util — loaded lazily with the model
+_util = None  # sentence_transformers.util — loaded lazily with the model
 
 
 def get_model():
     """Load sentence-transformers model on first call; cached globally after that."""
     global _model, _util
     if _model is None:
-        from sentence_transformers import SentenceTransformer, util as _st_util
+        from sentence_transformers import SentenceTransformer
+        from sentence_transformers import util as _st_util
+
         _model = SentenceTransformer("all-MiniLM-L6-v2")
-        _util  = _st_util
+        _util = _st_util
     return _model
 
 
 # ── Section detection for focused resume extract ─────────────────
 _INCLUDE_SECTIONS = {"experience", "skills", "summary", "projects", "work", "profile"}
-_EXCLUDE_SECTIONS = {"education", "awards", "certif", "hobbies", "references",
-                      "volunteer", "activities", "leadership"}
+_EXCLUDE_SECTIONS = {
+    "education",
+    "awards",
+    "certif",
+    "hobbies",
+    "references",
+    "volunteer",
+    "activities",
+    "leadership",
+}
 
 _CONTACT_RE = re.compile(
-    r"@|\(?\d{3}\)?[\s.\-]\d{3}[\s.\-]\d{4}|linkedin\.com|github\.com|http",
-    re.IGNORECASE
+    r"@|\(?\d{3}\)?[\s.\-]\d{3}[\s.\-]\d{4}|linkedin\.com|github\.com|http", re.IGNORECASE
 )
 
 # Skills that are short enough to produce false positive substring matches
@@ -33,35 +48,111 @@ _SHORT_SKILLS = {s for s in COMMON_SKILLS if len(s) <= 4 and s.isalpha()}
 def _skill_in_text(skill: str, text_lower: str) -> bool:
     """Check if a skill appears in text. Uses word boundaries for short skills."""
     if skill in _SHORT_SKILLS:
-        return bool(re.search(r'\b' + re.escape(skill) + r'\b', text_lower))
+        return bool(re.search(r"\b" + re.escape(skill) + r"\b", text_lower))
     return skill in text_lower
 
 
 # ── Meaningful JD phrase extraction ──────────────────────────────
 # Two-word phrases that signal required skills/competencies
 _SKILL_PHRASE_TAILS = {
-    "management", "analysis", "modeling", "development", "design",
-    "strategy", "analytics", "reporting", "communication", "leadership",
-    "coordination", "planning", "forecasting", "visualization",
-    "automation", "integration", "engineering", "architecture",
-    "optimization", "research", "operations", "assessment",
-    "implementation", "presentation", "administration",
+    "management",
+    "analysis",
+    "modeling",
+    "development",
+    "design",
+    "strategy",
+    "analytics",
+    "reporting",
+    "communication",
+    "leadership",
+    "coordination",
+    "planning",
+    "forecasting",
+    "visualization",
+    "automation",
+    "integration",
+    "engineering",
+    "architecture",
+    "optimization",
+    "research",
+    "operations",
+    "assessment",
+    "implementation",
+    "presentation",
+    "administration",
 }
 
 _SKILL_PHRASE_HEADS = {
-    "data", "financial", "project", "product", "business", "technical",
-    "strategic", "market", "content", "risk", "budget", "process",
-    "performance", "client", "stakeholder", "account", "program",
-    "customer", "revenue", "sales", "brand", "digital", "cloud",
-    "software", "systems", "security", "network", "database",
+    "data",
+    "financial",
+    "project",
+    "product",
+    "business",
+    "technical",
+    "strategic",
+    "market",
+    "content",
+    "risk",
+    "budget",
+    "process",
+    "performance",
+    "client",
+    "stakeholder",
+    "account",
+    "program",
+    "customer",
+    "revenue",
+    "sales",
+    "brand",
+    "digital",
+    "cloud",
+    "software",
+    "systems",
+    "security",
+    "network",
+    "database",
 }
 
-_STOP = frozenset([
-    "and", "the", "for", "with", "this", "that", "have", "will",
-    "your", "our", "are", "you", "we", "to", "of", "in", "a", "an",
-    "or", "is", "it", "at", "be", "as", "on", "by", "do", "not",
-    "but", "was", "can", "all", "they", "their", "from", "about",
-])
+_STOP = frozenset(
+    [
+        "and",
+        "the",
+        "for",
+        "with",
+        "this",
+        "that",
+        "have",
+        "will",
+        "your",
+        "our",
+        "are",
+        "you",
+        "we",
+        "to",
+        "of",
+        "in",
+        "a",
+        "an",
+        "or",
+        "is",
+        "it",
+        "at",
+        "be",
+        "as",
+        "on",
+        "by",
+        "do",
+        "not",
+        "but",
+        "was",
+        "can",
+        "all",
+        "they",
+        "their",
+        "from",
+        "about",
+    ]
+)
 
 
 def _extract_jd_phrases(jd_text: str) -> list[str]:
@@ -79,8 +170,7 @@ def _extract_jd_phrases(jd_text: str) -> list[str]:
         if w1 in _SKILL_PHRASE_HEADS and w2 in _SKILL_PHRASE_TAILS:
             bigrams.add(f"{w1} {w2}")
         elif w1 in _SKILL_PHRASE_TAILS and w2 not in _STOP:
-            # e.g. "analysis skills", "management experience" — use just the tail word
-            pass
+            bigrams.add(w1)
 
     # 2. Phrases from explicit requirement patterns
     patterns = [
@@ -142,9 +232,12 @@ def _extract_resume_core(resume_text: str) -> str:
         if _CONTACT_RE.search(stripped):
             continue
 
-        if re.search(r"[–\-—]\s*.{3,40}\s*[\(\[]?\d{4}|"
-                     r"\(20\d\d\s*[–\-]\s*(present|20\d\d)\)",
-                     stripped, re.IGNORECASE):
+        if re.search(
+            r"[–\-—]\s*.{3,40}\s*[\(\[]?\d{4}|"
+            r"\(20\d\d\s*[–\-]\s*(present|20\d\d)\)",
+            stripped,
+            re.IGNORECASE,
+        ):
             continue
 
         if re.match(r"^\d{4}\s*[–\-—]\s*(present|\d{4})\s*$", stripped, re.IGNORECASE):
@@ -166,30 +259,26 @@ def score_job(resume_text: str, job_description: str, job_title: str = "") -> in
     if not job_description.strip():
         return 0
 
-    core       = _extract_resume_core(resume_text)
-    model      = get_model()
+    core = _extract_resume_core(resume_text)
+    model = get_model()
     # Increased from 2500/1500 — ensures full resumes and long JDs are scored completely
     core_trunc = core[:5000]
-    jd_trunc   = job_description[:3000]
+    jd_trunc = job_description[:3000]
 
     embeddings = model.encode([core_trunc, jd_trunc], convert_to_tensor=True)
-    raw_sim    = _util.cos_sim(embeddings[0], embeddings[1]).item()
+    raw_sim = _util.cos_sim(embeddings[0], embeddings[1]).item()
 
-    # Adaptive rescaling: normalize relative to observed min/max rather than fixed bounds.
-    # Floor at 0.15 (near-random similarity), ceiling at 0.85 (near-identical text).
-    _SIM_FLOOR   = 0.15
-    _SIM_CEILING = 0.85
     semantic = max(0, min(100, int((raw_sim - _SIM_FLOOR) / (_SIM_CEILING - _SIM_FLOOR) * 100)))
 
     resume_lower = resume_text.lower()
-    jd_lower     = job_description.lower()
+    jd_lower = job_description.lower()
 
     jd_skills = [s for s in COMMON_SKILLS if _skill_in_text(s, jd_lower)]
     if jd_skills:
         matched_count = sum(1 for s in jd_skills if _skill_in_text(s, resume_lower))
         keyword_score = int(matched_count / len(jd_skills) * 100)
     else:
-        keyword_score = 0  # no known skills in JD — don't inflate with semantic
+        keyword_score = 50  # no tech-skill signals in JD; rely on semantic match
 
     # Title match: significant words in job title that appear in the resume
     # Include 2+ char words to catch acronyms like ML, AI, UX, PM
@@ -197,11 +286,12 @@ def score_job(resume_text: str, job_description: str, job_title: str = "") -> in
     if job_title:
         _stop = {"and", "or", "the", "a", "an", "of", "in", "at", "for", "to", "with"}
         title_words = [
-            w.lower() for w in re.findall(r"[a-zA-Z]{2,}", job_title)
-            if w.lower() not in _stop
+            w.lower() for w in re.findall(r"[a-zA-Z]{2,}", job_title) if w.lower() not in _stop
         ]
         if title_words:
-            hits = sum(1 for w in title_words if re.search(r'\b' + re.escape(w) + r'\b', resume_lower))
+            hits = sum(
+                1 for w in title_words if re.search(r"\b" + re.escape(w) + r"\b", resume_lower)
+            )
             title_score = int(hits / len(title_words) * 100)
 
     if job_title:
@@ -217,7 +307,7 @@ def get_skill_gaps(resume_text: str, job_description: str):
     Uses word-boundary matching for short skill names to avoid false positives.
     """
     resume_lower = resume_text.lower()
-    job_lower    = job_description.lower()
+    job_lower = job_description.lower()
 
     matched, missing = [], []
 
@@ -247,13 +337,13 @@ def get_skill_gaps(resume_text: str, job_description: str):
 
 # ── Pipeline / ghost-job signal phrases ──────────────────────────
 _GHOST_PIPELINE_PHRASES = [
-    ("we are always looking for",  "📋 Always hiring — may be pipeline"),
-    ("talent pool",                "📋 Talent pool — no confirmed opening"),
-    ("future opportunities",       "📋 Speculative — no confirmed opening"),
-    ("pipeline of candidates",     "📋 Pipeline posting"),
-    ("join our growing team",      "⚠ Generic posting — verify role is active"),
-    ("open to candidates",         "📋 May be exploratory"),
-    ("evergreen",                  "📋 Evergreen posting — timeline unclear"),
+    ("we are always looking for", "📋 Always hiring — may be pipeline"),
+    ("talent pool", "📋 Talent pool — no confirmed opening"),
+    ("future opportunities", "📋 Speculative — no confirmed opening"),
+    ("pipeline of candidates", "📋 Pipeline posting"),
+    ("join our growing team", "⚠ Generic posting — verify role is active"),
+    ("open to candidates", "📋 May be exploratory"),
+    ("evergreen", "📋 Evergreen posting — timeline unclear"),
 ]
 
 
@@ -263,7 +353,7 @@ def ghost_score(job: dict) -> tuple:
     Returns (score: int 0-100, signals: list[str]).
     Thresholds used in 2_Jobs.py: ≥30 = badge shown, ≥60 = red badge.
     """
-    score   = 0
+    score = 0
     signals = []
 
     # Age signal — most reliable ghost indicator
@@ -272,6 +362,7 @@ def ghost_score(job: dict) -> tuple:
     if date_str:
         try:
             from datetime import date as _d
+
             days_old = (_d.today() - _d.fromisoformat(date_str[:10])).days
         except Exception:
             pass
@@ -330,7 +421,7 @@ def salary_adjusted_score(base_score: int, job: dict, user_profile) -> tuple:
     if u_mid > 0:
         ratio = j_mid / u_mid
         if ratio < 0.80:
-            note = f"Below your ~${int(u_mid):,} target ({int(ratio*100)}% of target)"
+            note = f"Below your ~${int(u_mid):,} target ({int(ratio * 100)}% of target)"
             return max(0, base_score - 8), note
         if ratio < 0.90:
             note = f"Slightly below your target (${int(j_mid):,} vs ${int(u_mid):,})"
@@ -348,10 +439,8 @@ def batch_score_jobs(resume_text: str, jobs: list, user_profile=None) -> None:
     if not jobs:
         return
 
-    from resume_parser import COMMON_SKILLS as _cs  # already imported at module level
-
     resume_lower = resume_text.lower()
-    core         = _extract_resume_core(resume_text)
+    core = _extract_resume_core(resume_text)
 
     # Collect all descriptions for batch embedding
     descs = [(job.get("description") or "")[:3000] for job in jobs]
@@ -361,16 +450,13 @@ def batch_score_jobs(resume_text: str, jobs: list, user_profile=None) -> None:
     has_desc = any(d.strip() for d in descs)
     if has_desc:
         model = get_model()
-        texts     = [core_trunc] + descs
+        texts = [core_trunc] + descs
         embeddings = model.encode(texts, convert_to_tensor=True, show_progress_bar=False)
         resume_emb = embeddings[0]
-        job_embs   = embeddings[1:]
+        job_embs = embeddings[1:]
     else:
         resume_emb = None
-        job_embs   = [None] * len(jobs)
-
-    _SIM_FLOOR   = 0.15
-    _SIM_CEILING = 0.85
+        job_embs = [None] * len(jobs)
 
     for i, job in enumerate(jobs):
         desc = descs[i]
@@ -378,14 +464,16 @@ def batch_score_jobs(resume_text: str, jobs: list, user_profile=None) -> None:
 
         # ── Semantic score ────────────────────────────────────────
         if desc.strip() and resume_emb is not None and job_embs[i] is not None:
-            raw_sim  = _util.cos_sim(resume_emb, job_embs[i]).item()
-            semantic = max(0, min(100, int((raw_sim - _SIM_FLOOR) / (_SIM_CEILING - _SIM_FLOOR) * 100)))
+            raw_sim = _util.cos_sim(resume_emb, job_embs[i]).item()
+            semantic = max(
+                0, min(100, int((raw_sim - _SIM_FLOOR) / (_SIM_CEILING - _SIM_FLOOR) * 100))
+            )
         else:
             semantic = 0
 
         # ── Keyword score ─────────────────────────────────────────
-        jd_lower  = desc.lower()
-        jd_skills = [s for s in _cs if _skill_in_text(s, jd_lower)]
+        jd_lower = desc.lower()
+        jd_skills = [s for s in COMMON_SKILLS if _skill_in_text(s, jd_lower)]
         if jd_skills:
             mc = sum(1 for s in jd_skills if _skill_in_text(s, resume_lower))
             keyword_score = int(mc / len(jd_skills) * 100)
@@ -393,11 +481,15 @@ def batch_score_jobs(resume_text: str, jobs: list, user_profile=None) -> None:
             keyword_score = 0  # no known skills in JD — don't inflate with semantic
 
         # ── Title score ───────────────────────────────────────────
-        _stop = {"and","or","the","a","an","of","in","at","for","to","with"}
+        _stop = {"and", "or", "the", "a", "an", "of", "in", "at", "for", "to", "with"}
         # Include 2+ char words to catch acronyms like ML, AI, UX, PM
-        title_words = [w.lower() for w in re.findall(r"[a-zA-Z]{2,}", title) if w.lower() not in _stop]
+        title_words = [
+            w.lower() for w in re.findall(r"[a-zA-Z]{2,}", title) if w.lower() not in _stop
+        ]
         if title_words:
-            hits = sum(1 for w in title_words if re.search(r'\b' + re.escape(w) + r'\b', resume_lower))
+            hits = sum(
+                1 for w in title_words if re.search(r"\b" + re.escape(w) + r"\b", resume_lower)
+            )
             title_score = int(hits / len(title_words) * 100)
             final = min(100, int(semantic * 0.50 + keyword_score * 0.35 + title_score * 0.15))
         else:
@@ -405,13 +497,13 @@ def batch_score_jobs(resume_text: str, jobs: list, user_profile=None) -> None:
 
         # ── Skill gaps ────────────────────────────────────────────
         matched, missing = [], []
-        for skill in _cs:
+        for skill in COMMON_SKILLS:
             if _skill_in_text(skill, jd_lower):
                 if _skill_in_text(skill, resume_lower):
                     matched.append(skill)
                 else:
                     missing.append(skill)
-        common_lower_set = {s.lower() for s in _cs}
+        common_lower_set = {s.lower() for s in COMMON_SKILLS}
         for phrase in _extract_jd_phrases(jd_lower):
             if phrase in common_lower_set:
                 continue
@@ -427,9 +519,9 @@ def batch_score_jobs(resume_text: str, jobs: list, user_profile=None) -> None:
         # ── Salary alignment ──────────────────────────────────────
         adjusted, sal_note = salary_adjusted_score(final, job, user_profile)
 
-        job["score"]         = adjusted
-        job["matched"]       = matched
-        job["missing"]       = missing
-        job["ghost_score"]   = g_score
+        job["score"] = adjusted
+        job["matched"] = matched
+        job["missing"] = missing
+        job["ghost_score"] = g_score
         job["ghost_signals"] = g_signals
-        job["salary_note"]   = sal_note
+        job["salary_note"] = sal_note

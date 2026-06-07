@@ -6,10 +6,10 @@ outcomes. Correlates version → response rate → interviews → offers.
 SQLite-backed, thread-safe.
 """
 
+import logging
 import sqlite3
 import threading
-import logging
-from datetime import datetime, date
+from datetime import date, datetime
 from pathlib import Path
 
 _DB = str(Path(__file__).parent / "ab_testing.db")
@@ -62,6 +62,7 @@ _init()
 
 # ── Resume versions ───────────────────────────────────────────────
 
+
 def save_version(name: str, raw_text: str, label: str = "", summary: str = "") -> int:
     """Save a resume version. Returns the new version id."""
     with _lock:
@@ -80,9 +81,7 @@ def get_versions() -> list[dict]:
     """Return all resume versions sorted by creation date desc."""
     with _lock:
         conn = _connect()
-        rows = conn.execute(
-            "SELECT * FROM resume_versions ORDER BY created_at DESC"
-        ).fetchall()
+        rows = conn.execute("SELECT * FROM resume_versions ORDER BY created_at DESC").fetchall()
         conn.close()
     return [dict(r) for r in rows]
 
@@ -106,6 +105,7 @@ def update_version_label(version_id: int, label: str):
 
 # ── Applications ──────────────────────────────────────────────────
 
+
 def log_application(
     version_id: int,
     job_title: str,
@@ -122,8 +122,7 @@ def log_application(
             """INSERT INTO ab_applications
                (version_id, job_title, company, applied_date, notes, created_at)
                VALUES (?,?,?,?,?,?)""",
-            (version_id, job_title, company, applied_date, notes,
-             datetime.utcnow().isoformat()),
+            (version_id, job_title, company, applied_date, notes, datetime.utcnow().isoformat()),
         )
         aid = cur.lastrowid
         conn.commit()
@@ -131,7 +130,9 @@ def log_application(
     return aid
 
 
-def update_application_status(app_id: int, status: str, response_days: int = None, notes: str = None):
+def update_application_status(
+    app_id: int, status: str, response_days: int = None, notes: str = None
+):
     """Update outcome of an AB application."""
     with _lock:
         conn = _connect()
@@ -178,6 +179,7 @@ def get_applications(version_id: int = None) -> list[dict]:
 
 # ── Analytics ─────────────────────────────────────────────────────
 
+
 def compute_stats() -> list[dict]:
     """
     Compute per-version stats:
@@ -189,27 +191,40 @@ def compute_stats() -> list[dict]:
 
     results = []
     for v in versions:
-        vid  = v["id"]
+        vid = v["id"]
         apps = [a for a in all_apps if a["version_id"] == vid]
         if not apps:
-            results.append({**v, "apps": 0, "responses": 0, "interviews": 0,
-                            "offers": 0, "response_rate": 0, "avg_days": None})
+            results.append(
+                {
+                    **v,
+                    "apps": 0,
+                    "responses": 0,
+                    "interviews": 0,
+                    "offers": 0,
+                    "response_rate": 0,
+                    "avg_days": None,
+                }
+            )
             continue
 
-        responses  = [a for a in apps if a["status"] not in ("applied", "no_response", "rejected_no_response")]
+        responses = [
+            a for a in apps if a["status"] not in ("applied", "no_response", "rejected_no_response")
+        ]
         interviews = [a for a in apps if a["status"] in ("interview", "offer", "accepted")]
-        offers     = [a for a in apps if a["status"] in ("offer", "accepted")]
-        days_list  = [a["response_days"] for a in apps if a.get("response_days")]
+        offers = [a for a in apps if a["status"] in ("offer", "accepted")]
+        days_list = [a["response_days"] for a in apps if a.get("response_days")]
 
-        results.append({
-            **v,
-            "apps":          len(apps),
-            "responses":     len(responses),
-            "interviews":    len(interviews),
-            "offers":        len(offers),
-            "response_rate": round(len(responses) / len(apps) * 100, 1) if apps else 0,
-            "avg_days":      round(sum(days_list) / len(days_list), 1) if days_list else None,
-        })
+        results.append(
+            {
+                **v,
+                "apps": len(apps),
+                "responses": len(responses),
+                "interviews": len(interviews),
+                "offers": len(offers),
+                "response_rate": round(len(responses) / len(apps) * 100, 1) if apps else 0,
+                "avg_days": round(sum(days_list) / len(days_list), 1) if days_list else None,
+            }
+        )
 
     return results
 
@@ -231,11 +246,9 @@ def version_comparison() -> dict:
         }
 
     best_resp = max(has_data, key=lambda s: s["response_rate"])
-    best_int  = max(has_data, key=lambda s: s["interviews"] / max(s["apps"], 1))
+    best_int = max(has_data, key=lambda s: s["interviews"] / max(s["apps"], 1))
 
-    insight = (
-        f"Version '{best_resp['name']}' has the highest response rate ({best_resp['response_rate']}%). "
-    )
+    insight = f"Version '{best_resp['name']}' has the highest response rate ({best_resp['response_rate']}%). "
     if best_int["id"] != best_resp["id"]:
         int_rate = round(best_int["interviews"] / best_int["apps"] * 100, 1)
         insight += f"But '{best_int['name']}' converts more interviews ({int_rate}% of apps reach interview stage)."
@@ -243,8 +256,8 @@ def version_comparison() -> dict:
         insight += "It also leads on interview conversion."
 
     return {
-        "stats":          stats,
-        "best_response":  best_resp,
+        "stats": stats,
+        "best_response": best_resp,
         "best_interview": best_int,
-        "insight":        insight,
+        "insight": insight,
     }

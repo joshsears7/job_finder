@@ -1,10 +1,11 @@
 import os
-import time
+
 import streamlit as st
 from dotenv import load_dotenv
+
 load_dotenv()
 
-from utils import inject_css, alert, chip, xe
+from utils import alert, inject_css, xe
 
 inject_css()
 
@@ -22,10 +23,10 @@ if not profile:
 
 # ── Cloud detection — Auto Apply needs a local browser (Playwright + Chromium) ───
 _IS_CLOUD = bool(
-    os.getenv("SPACE_ID")               # HuggingFace Spaces
-    or os.getenv("RAILWAY_ENVIRONMENT") # Railway
+    os.getenv("SPACE_ID")  # HuggingFace Spaces
+    or os.getenv("RAILWAY_ENVIRONMENT")  # Railway
     or os.getenv("STREAMLIT_SHARING_MODE")  # Streamlit Cloud
-    or os.getenv("DYNO")                # Heroku
+    or os.getenv("DYNO")  # Heroku
 )
 
 if _IS_CLOUD:
@@ -35,7 +36,7 @@ if _IS_CLOUD:
             "It opens a real Chrome window on your machine, watches you approve each application, "
             "and types into LinkedIn's Easy Apply forms. That requires a local browser — "
             "cloud servers don't have one.",
-            "blue"
+            "blue",
         ),
         unsafe_allow_html=True,
     )
@@ -59,12 +60,12 @@ Navigate to Auto Apply in the sidebar, enter your LinkedIn email and password di
     st.stop()
 
 # ── Playwright check ─────────────────────────────────────────────────────────
-_has_playwright = False
 try:
-    import playwright
-    _has_playwright = True
-except ImportError:
-    pass
+    import importlib.util
+
+    _has_playwright = importlib.util.find_spec("playwright") is not None
+except Exception:
+    _has_playwright = False
 
 if not _has_playwright:
     st.markdown(
@@ -72,7 +73,7 @@ if not _has_playwright:
             "<b>Playwright not installed.</b> Run these two commands in your terminal, then restart the app:<br>"
             "<code>pip install playwright</code><br>"
             "<code>python -m playwright install chromium</code>",
-            "amber"
+            "amber",
         ),
         unsafe_allow_html=True,
     )
@@ -83,7 +84,7 @@ st.markdown("<div class='section-tag'>LinkedIn Account</div>", unsafe_allow_html
 st.caption("Used only by the local browser. Never saved to disk or sent anywhere.")
 
 cred_c1, cred_c2 = st.columns(2)
-li_email    = cred_c1.text_input(
+li_email = cred_c1.text_input(
     "LinkedIn email",
     value=st.session_state.get("aa_li_email", os.getenv("LINKEDIN_EMAIL", "")),
     placeholder="you@example.com",
@@ -126,18 +127,22 @@ st.markdown(
 st.markdown("<div class='section-tag'>Search Settings</div>", unsafe_allow_html=True)
 
 c1, c2 = st.columns(2)
-role     = c1.text_input("Job title / keywords", placeholder="e.g. Business Analyst Intern", key="aa_role")
+role = c1.text_input(
+    "Job title / keywords", placeholder="e.g. Business Analyst Intern", key="aa_role"
+)
 location = c2.text_input("Location", placeholder="e.g. New York, NY or Remote", key="aa_location")
 
 c3, c4, c5 = st.columns(3)
 exp_map = {
-    "Any":         "",
-    "Internship":  "1",
+    "Any": "",
+    "Internship": "1",
     "Entry Level": "2",
-    "Associate":   "3",
+    "Associate": "3",
 }
 exp_choice = c3.selectbox("Experience level", list(exp_map.keys()), key="aa_exp")
-max_apps   = c4.number_input("Max applications this session", min_value=1, max_value=20, value=10, key="aa_max")
+max_apps = c4.number_input(
+    "Max applications this session", min_value=1, max_value=20, value=10, key="aa_max"
+)
 dry_run_on = c5.checkbox("Dry run (don't actually submit)", value=True, key="aa_dry")
 
 if dry_run_on:
@@ -149,20 +154,26 @@ if dry_run_on:
 
 # ── Profile supplement ────────────────────────────────────────────────────────
 with st.expander("Profile details for form autofill", expanded=False):
-    st.caption("Auto-fills LinkedIn Easy Apply fields. LinkedIn profile data is used where available.")
+    st.caption(
+        "Auto-fills LinkedIn Easy Apply fields. LinkedIn profile data is used where available."
+    )
     pf_c1, pf_c2 = st.columns(2)
-    aa_phone    = pf_c1.text_input("Phone", key="aa_phone", placeholder="+1 555-555-5555")
-    aa_city     = pf_c2.text_input("Your city", key="aa_city", placeholder="Charlotte, NC")
-    aa_linkedin = pf_c1.text_input("LinkedIn URL", key="aa_li_url", placeholder="linkedin.com/in/yourprofile")
-    aa_website  = pf_c2.text_input("Portfolio / website", key="aa_website", placeholder="yoursite.com")
+    aa_phone = pf_c1.text_input("Phone", key="aa_phone", placeholder="+1 555-555-5555")
+    aa_city = pf_c2.text_input("Your city", key="aa_city", placeholder="Charlotte, NC")
+    aa_linkedin = pf_c1.text_input(
+        "LinkedIn URL", key="aa_li_url", placeholder="linkedin.com/in/yourprofile"
+    )
+    aa_website = pf_c2.text_input(
+        "Portfolio / website", key="aa_website", placeholder="yoursite.com"
+    )
 
 supplemented_profile = {
     **profile,
-    "phone":        aa_phone,
-    "location":     aa_city or profile.get("location", ""),
+    "phone": aa_phone,
+    "location": aa_city or profile.get("location", ""),
     "linkedin_url": aa_linkedin,
-    "website":      aa_website,
-    "email":        li_email,
+    "website": aa_website,
+    "email": li_email,
 }
 
 # ── Launch ────────────────────────────────────────────────────────────────────
@@ -179,7 +190,7 @@ if st.button(
     disabled=not _has_creds,
 ):
     st.markdown("<div class='section-tag'>Session Progress</div>", unsafe_allow_html=True)
-    status_box  = st.empty()
+    status_box = st.empty()
     results_box = st.container()
     applied_log = []
 
@@ -187,7 +198,7 @@ if st.button(
         status_box.caption(msg)
 
     def _confirm(job, score, cover_letter):
-        job_key  = f"aa_confirm_{job['job_id']}"
+        job_key = f"aa_confirm_{job['job_id']}"
         skip_key = f"aa_skip_{job['job_id']}"
 
         with results_box:
@@ -208,9 +219,13 @@ if st.button(
 
             col_apply, col_skip = st.columns(2)
             do_apply = col_apply.button("Apply", key=job_key, type="primary")
-            do_skip  = col_skip.button("Skip", key=skip_key)
+            do_skip = col_skip.button("Skip", key=skip_key)
 
-        return bool(do_apply) if do_apply else (False if do_skip else False)
+        if do_apply:
+            return True
+        if do_skip:
+            return None
+        return False
 
     try:
         from linkedin_applier import run_apply_session
@@ -239,12 +254,12 @@ if st.button(
         st.markdown("<div class='section-tag'>Session Summary</div>", unsafe_allow_html=True)
         applied = [r for r in applied_log if r.get("status") == "applied"]
         skipped = [r for r in applied_log if r.get("status") == "skipped"]
-        failed  = [r for r in applied_log if r.get("status") == "failed"]
+        failed = [r for r in applied_log if r.get("status") == "failed"]
 
         m1, m2, m3 = st.columns(3)
         m1.metric("Applied", len(applied))
         m2.metric("Skipped", len(skipped))
-        m3.metric("Failed",  len(failed))
+        m3.metric("Failed", len(failed))
 
         if applied:
             st.markdown("<div style='margin-top:12px'></div>", unsafe_allow_html=True)

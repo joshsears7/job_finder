@@ -7,44 +7,45 @@ across dimensions: relevance, grounding, specificity, tone, keyword coverage.
 No external eval framework required — pure Python + Claude.
 """
 
-import re
-import sqlite3
-import threading
 import logging
+import re
+import threading
 from datetime import datetime
 from pathlib import Path
 
-_DB   = str(Path(__file__).parent / "eval_results.db")
+import db as _db
+
+_SQLITE_PATH = Path(__file__).parent / "eval_results.db"
 _lock = threading.Lock()
-_log  = logging.getLogger(__name__)
+_log = logging.getLogger(__name__)
+
+_DDL = """
+    CREATE TABLE IF NOT EXISTS eval_results (
+        id           INTEGER PRIMARY KEY AUTOINCREMENT,
+        output_type  TEXT NOT NULL,
+        model        TEXT DEFAULT 'haiku',
+        relevance    INTEGER,
+        grounding    INTEGER,
+        specificity  INTEGER,
+        tone         INTEGER,
+        keyword_cov  INTEGER,
+        overall      INTEGER,
+        flags        TEXT DEFAULT '[]',
+        input_hash   TEXT,
+        created_at   TEXT NOT NULL
+    )
+"""
 
 
-def _connect() -> sqlite3.Connection:
-    conn = sqlite3.connect(_DB, check_same_thread=False, timeout=10)
-    conn.row_factory = sqlite3.Row
-    conn.execute("PRAGMA journal_mode=WAL")
-    return conn
+def _connect():
+    return _db.connect(None if _db.IS_POSTGRES else _SQLITE_PATH)
 
 
 def _init():
     with _lock:
         conn = _connect()
-        conn.executescript("""
-            CREATE TABLE IF NOT EXISTS eval_results (
-                id           INTEGER PRIMARY KEY AUTOINCREMENT,
-                output_type  TEXT NOT NULL,
-                model        TEXT DEFAULT 'haiku',
-                relevance    INTEGER,
-                grounding    INTEGER,
-                specificity  INTEGER,
-                tone         INTEGER,
-                keyword_cov  INTEGER,
-                overall      INTEGER,
-                flags        TEXT DEFAULT '[]',
-                input_hash   TEXT,
-                created_at   TEXT NOT NULL
-            );
-        """)
+        ddl = _db._pg_schema(_DDL) if _db.IS_POSTGRES else _DDL
+        conn.execute(ddl)
         conn.commit()
         conn.close()
 
@@ -54,6 +55,7 @@ _init()
 
 # ── Heuristic evaluators (no API cost) ───────────────────────────
 
+
 def _keyword_coverage(generated: str, job_description: str) -> int:
     """
     0-100: what fraction of non-trivial JD words appear in the generated text?
@@ -61,20 +63,60 @@ def _keyword_coverage(generated: str, job_description: str) -> int:
     """
     if not job_description.strip():
         return 100  # can't evaluate without JD
-    _stop = frozenset([
-        "and","or","the","a","an","of","in","at","for","to","with","is","are",
-        "will","you","your","we","our","this","that","have","be","as","by",
-        "from","their","they","can","all","but","not","do","may","must","also",
-        "would","should","through","including","within","across","provide","ensure",
-    ])
+    _stop = frozenset(
+        [
+            "and",
+            "or",
+            "the",
+            "a",
+            "an",
+            "of",
+            "in",
+            "at",
+            "for",
+            "to",
+            "with",
+            "is",
+            "are",
+            "will",
+            "you",
+            "your",
+            "we",
+            "our",
+            "this",
+            "that",
+            "have",
+            "be",
+            "as",
+            "by",
+            "from",
+            "their",
+            "they",
+            "can",
+            "all",
+            "but",
+            "not",
+            "do",
+            "may",
+            "must",
+            "also",
+            "would",
+            "should",
+            "through",
+            "including",
+            "within",
+            "across",
+            "provide",
+            "ensure",
+        ]
+    )
     jd_words = {
-        w.lower() for w in re.findall(r"[a-zA-Z]{4,}", job_description)
-        if w.lower() not in _stop
+        w.lower() for w in re.findall(r"[a-zA-Z]{4,}", job_description) if w.lower() not in _stop
     }
     if not jd_words:
         return 100
     gen_lower = generated.lower()
-    covered   = sum(1 for w in jd_words if w in gen_lower)
+    covered = sum(1 for w in jd_words if w in gen_lower)
     return min(100, int(covered / len(jd_words) * 100))
 
 
@@ -87,7 +129,7 @@ def _grounding_score(generated: str, resume_text: str) -> int:
         return 50  # neutral when no resume provided
 
     # Extract specific signals from resume: numbers, capitalized phrases ≥3 chars
-    numbers    = re.findall(r"\d+", resume_text)
+    numbers = re.findall(r"\d+", resume_text)
     cap_phrases = re.findall(r"[A-Z][a-zA-Z]{2,}(?:\s+[A-Z][a-zA-Z]{2,})*", resume_text)
 
     gen_lower = generated.lower()
@@ -108,7 +150,7 @@ def _grounding_score(generated: str, resume_text: str) -> int:
 
     if total_checks == 0:
         return 50
-    return min(100, int(hits / total_checks * 100) + 30)  # +30 floor (some generalization is fine)
+    return min(100, int(hits / total_checks * 100) + 15)
 
 
 def _specificity_score(generated: str) -> int:
@@ -117,20 +159,41 @@ def _specificity_score(generated: str) -> int:
     Specific text = real names, numbers, outcomes. Vague text = buzzwords and platitudes.
     """
     _VAGUE = [
-        "results-driven", "team player", "passionate", "hardworking", "dynamic",
-        "synergy", "leverage", "utilize", "impactful", "innovative", "proactive",
-        "go-getter", "self-starter", "detail-oriented", "fast-paced", "excited about",
-        "looking to grow", "seeking an opportunity", "i am a", "i believe that",
-        "I am passionate", "deeply passionate", "extensive experience",
-        "proven track record", "seasoned professional",
+        "results-driven",
+        "team player",
+        "passionate",
+        "hardworking",
+        "dynamic",
+        "synergy",
+        "leverage",
+        "utilize",
+        "impactful",
+        "innovative",
+        "proactive",
+        "go-getter",
+        "self-starter",
+        "detail-oriented",
+        "fast-paced",
+        "excited about",
+        "looking to grow",
+        "seeking an opportunity",
+        "i am a",
+        "i believe that",
+        "I am passionate",
+        "deeply passionate",
+        "extensive experience",
+        "proven track record",
+        "seasoned professional",
     ]
     _SPECIFIC = [
-        r"\d+%", r"\$[\d,]+", r"\d+ (years?|months?|people|team|users?|customers?)",
+        r"\d+%",
+        r"\$[\d,]+",
+        r"\d+ (years?|months?|people|team|users?|customers?)",
         r"(built|shipped|launched|led|reduced|increased|drove|generated|grew)\s+\w+",
     ]
 
     text_lower = generated.lower()
-    vague_hits   = sum(1 for v in _VAGUE if v.lower() in text_lower)
+    vague_hits = sum(1 for v in _VAGUE if v.lower() in text_lower)
     specific_hits = sum(1 for p in _SPECIFIC if re.search(p, generated, re.IGNORECASE))
 
     # Start at 70, subtract for vague, add for specific
@@ -192,6 +255,7 @@ def _relevance_score(generated: str, job_description: str, output_type: str) -> 
 
 # ── Main eval function ────────────────────────────────────────────
 
+
 def evaluate(
     generated: str,
     output_type: str,
@@ -209,20 +273,26 @@ def evaluate(
     if not generated or not generated.strip():
         return {"error": "No output to evaluate."}
 
-    relevance   = _relevance_score(generated, job_description, output_type)
-    grounding   = _grounding_score(generated, resume_text)
+    relevance = _relevance_score(generated, job_description, output_type)
+    grounding = _grounding_score(generated, resume_text)
     specificity = _specificity_score(generated)
-    tone        = _tone_score(generated, output_type)
+    tone = _tone_score(generated, output_type)
     keyword_cov = _keyword_coverage(generated, job_description)
 
     # Weighted overall — relevance and grounding matter most
-    weights = {"relevance": 0.25, "grounding": 0.25, "specificity": 0.25, "tone": 0.15, "keyword_cov": 0.10}
+    weights = {
+        "relevance": 0.25,
+        "grounding": 0.25,
+        "specificity": 0.25,
+        "tone": 0.15,
+        "keyword_cov": 0.10,
+    }
     overall = int(
-        relevance   * weights["relevance"]  +
-        grounding   * weights["grounding"]  +
-        specificity * weights["specificity"] +
-        tone        * weights["tone"]       +
-        keyword_cov * weights["keyword_cov"]
+        relevance * weights["relevance"]
+        + grounding * weights["grounding"]
+        + specificity * weights["specificity"]
+        + tone * weights["tone"]
+        + keyword_cov * weights["keyword_cov"]
     )
 
     # Flags — things to improve
@@ -238,19 +308,29 @@ def evaluate(
     if keyword_cov < 30 and job_description:
         flags.append("Low JD keyword coverage — consider tailoring further")
 
-    grade = "A" if overall >= 85 else "B" if overall >= 70 else "C" if overall >= 55 else "D" if overall >= 40 else "F"
+    grade = (
+        "A"
+        if overall >= 85
+        else "B"
+        if overall >= 70
+        else "C"
+        if overall >= 55
+        else "D"
+        if overall >= 40
+        else "F"
+    )
 
     result = {
-        "relevance":   relevance,
-        "grounding":   grounding,
+        "relevance": relevance,
+        "grounding": grounding,
         "specificity": specificity,
-        "tone":        tone,
+        "tone": tone,
         "keyword_cov": keyword_cov,
-        "overall":     overall,
-        "grade":       grade,
-        "flags":       flags,
+        "overall": overall,
+        "grade": grade,
+        "flags": flags,
         "output_type": output_type,
-        "model":       model,
+        "model": model,
     }
 
     if persist:
@@ -261,6 +341,7 @@ def evaluate(
 
 def _persist(result: dict):
     import json
+
     with _lock:
         try:
             conn = _connect()
@@ -270,9 +351,14 @@ def _persist(result: dict):
                     keyword_cov, overall, flags, created_at)
                    VALUES (?,?,?,?,?,?,?,?,?,?)""",
                 (
-                    result["output_type"], result["model"],
-                    result["relevance"], result["grounding"], result["specificity"],
-                    result["tone"], result["keyword_cov"], result["overall"],
+                    result["output_type"],
+                    result["model"],
+                    result["relevance"],
+                    result["grounding"],
+                    result["specificity"],
+                    result["tone"],
+                    result["keyword_cov"],
+                    result["overall"],
                     json.dumps(result["flags"]),
                     datetime.utcnow().isoformat(),
                 ),
@@ -285,9 +371,11 @@ def _persist(result: dict):
 
 # ── Aggregate stats ────────────────────────────────────────────────
 
+
 def get_eval_history(limit: int = 50) -> list[dict]:
     """Return recent eval results."""
     import json
+
     with _lock:
         conn = _connect()
         rows = conn.execute(
@@ -309,7 +397,7 @@ def get_eval_summary() -> dict:
     """Aggregate stats across all eval results."""
     with _lock:
         conn = _connect()
-        rows = conn.execute("SELECT * FROM eval_results").fetchall()
+        rows = conn.execute("SELECT * FROM eval_results ORDER BY id DESC LIMIT 5000").fetchall()
         conn.close()
 
     if not rows:
@@ -317,8 +405,8 @@ def get_eval_summary() -> dict:
 
     rows = [dict(r) for r in rows]
     total = len(rows)
-    avg_overall    = round(sum(r["overall"] or 0 for r in rows) / total, 1)
-    avg_grounding  = round(sum(r["grounding"] or 0 for r in rows) / total, 1)
+    avg_overall = round(sum(r["overall"] or 0 for r in rows) / total, 1)
+    avg_grounding = round(sum(r["grounding"] or 0 for r in rows) / total, 1)
     avg_specificity = round(sum(r["specificity"] or 0 for r in rows) / total, 1)
 
     by_type: dict = {}
@@ -328,9 +416,9 @@ def get_eval_summary() -> dict:
     type_avgs = {t: round(sum(v) / len(v), 1) for t, v in by_type.items()}
 
     return {
-        "total":          total,
-        "avg_overall":    avg_overall,
-        "avg_grounding":  avg_grounding,
+        "total": total,
+        "avg_overall": avg_overall,
+        "avg_grounding": avg_grounding,
         "avg_specificity": avg_specificity,
-        "by_type":        type_avgs,
+        "by_type": type_avgs,
     }

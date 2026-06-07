@@ -4,18 +4,22 @@ Tests for scorer.py — pure-function and integration layers.
 Model-dependent tests (score_job, batch_score_jobs) are marked with
 pytest.mark.slow and skipped by default unless -m slow is passed.
 """
+
+import datetime
+
 import pytest
+
 from scorer import (
-    _skill_in_text,
     _extract_jd_phrases,
+    _skill_in_text,
     get_skill_gaps,
     ghost_score,
     salary_adjusted_score,
 )
-from tests.conftest import SAMPLE_RESUME, SAMPLE_JD_ANALYST, SAMPLE_JD_UNRELATED, SAMPLE_JOB
-
+from tests.conftest import SAMPLE_JD_ANALYST, SAMPLE_JD_UNRELATED, SAMPLE_JOB, SAMPLE_RESUME
 
 # ── _skill_in_text ────────────────────────────────────────────────────────────
+
 
 class TestSkillInText:
     def test_long_skill_substring_match(self):
@@ -54,6 +58,7 @@ class TestSkillInText:
 
 # ── _extract_jd_phrases ───────────────────────────────────────────────────────
 
+
 class TestExtractJdPhrases:
     def test_returns_list(self):
         phrases = _extract_jd_phrases(SAMPLE_JD_ANALYST)
@@ -85,6 +90,7 @@ class TestExtractJdPhrases:
 
 
 # ── get_skill_gaps ────────────────────────────────────────────────────────────
+
 
 class TestGetSkillGaps:
     def test_returns_two_lists(self):
@@ -121,9 +127,11 @@ class TestGetSkillGaps:
 
 # ── ghost_score ───────────────────────────────────────────────────────────────
 
+
 class TestGhostScore:
     def test_fresh_job_low_score(self):
-        score, signals = ghost_score({"date": "2026-04-28", "description": "Great role."})
+        yesterday = (datetime.date.today() - datetime.timedelta(days=1)).isoformat()
+        score, signals = ghost_score({"date": yesterday, "description": "Great role."})
         assert score < 30, f"Expected <30 for day-old job, got {score}"
 
     def test_stale_job_moderate_score(self):
@@ -137,13 +145,14 @@ class TestGhostScore:
 
     def test_pipeline_phrase_raises_score(self):
         job = {
-            "date":        "2026-04-25",
+            "date": "2026-04-25",
             "description": "We are always looking for talented engineers to join our talent pool.",
         }
         score, signals = ghost_score(job)
         assert score >= 20
-        assert any("pool" in s.lower() or "pipeline" in s.lower() or "always" in s.lower()
-                   for s in signals)
+        assert any(
+            "pool" in s.lower() or "pipeline" in s.lower() or "always" in s.lower() for s in signals
+        )
 
     def test_no_description_adds_signal(self):
         score, signals = ghost_score({"date": "2026-04-25", "description": ""})
@@ -158,7 +167,7 @@ class TestGhostScore:
 
     def test_score_capped_at_100(self):
         job = {
-            "date":        "2024-01-01",   # very old
+            "date": "2024-01-01",  # very old
             "description": "talent pool pipeline future opportunities always looking",
         }
         score, _ = ghost_score(job)
@@ -174,6 +183,7 @@ class TestGhostScore:
 
 
 # ── salary_adjusted_score ─────────────────────────────────────────────────────
+
 
 class TestSalaryAdjustedScore:
     def test_no_profile_returns_base(self):
@@ -219,34 +229,41 @@ class TestSalaryAdjustedScore:
 
 # ── score_job (model-dependent, slow) ────────────────────────────────────────
 
+
 @pytest.mark.slow
 class TestScoreJob:
     def test_high_score_for_matching_resume(self):
         from scorer import score_job
+
         score = score_job(SAMPLE_RESUME, SAMPLE_JD_ANALYST, "Business Analyst")
         assert score >= 50, f"Expected ≥50 for matching resume/JD, got {score}"
 
     def test_low_score_for_unrelated_jd(self):
         from scorer import score_job
+
         score = score_job(SAMPLE_RESUME, SAMPLE_JD_UNRELATED, "Registered Nurse")
         assert score <= 40, f"Expected ≤40 for unrelated JD, got {score}"
 
     def test_score_bounds(self):
         from scorer import score_job
+
         score = score_job(SAMPLE_RESUME, SAMPLE_JD_ANALYST, "Analyst")
         assert 0 <= score <= 100
 
     def test_no_jd_returns_zero(self):
         from scorer import score_job
+
         assert score_job(SAMPLE_RESUME, "", "Analyst") == 0
 
 
 # ── batch_score_jobs (model-dependent, slow) ──────────────────────────────────
 
+
 @pytest.mark.slow
 class TestBatchScoreJobs:
     def test_mutates_jobs_in_place(self):
         from scorer import batch_score_jobs
+
         jobs = [dict(SAMPLE_JOB), dict(SAMPLE_JOB, id="job-002", description="")]
         batch_score_jobs(SAMPLE_RESUME, jobs)
         for j in jobs:
@@ -259,10 +276,12 @@ class TestBatchScoreJobs:
 
     def test_empty_list_no_crash(self):
         from scorer import batch_score_jobs
+
         batch_score_jobs(SAMPLE_RESUME, [])
 
     def test_score_types_correct(self):
         from scorer import batch_score_jobs
+
         jobs = [dict(SAMPLE_JOB)]
         batch_score_jobs(SAMPLE_RESUME, jobs)
         j = jobs[0]

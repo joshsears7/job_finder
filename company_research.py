@@ -8,10 +8,11 @@ Claude synthesizes the raw signals into a structured dossier.
 
 import os
 import re
-import time
 import threading
+import time
+from datetime import datetime
+
 import requests
-from datetime import datetime, timedelta
 from dotenv import load_dotenv
 
 load_dotenv()
@@ -48,8 +49,10 @@ def _strip_html(html: str) -> str:
 
 # ── News via GNews RSS ────────────────────────────────────────────
 
+
 def fetch_company_news(company: str, max_articles: int = 8) -> list[dict]:
     """Pull recent news for a company via Google News RSS."""
+
     def _fetch():
         query = f'"{company}"'
         url = f"https://news.google.com/rss/search?q={requests.utils.quote(query)}&hl=en-US&gl=US&ceid=US:en"
@@ -60,36 +63,42 @@ def fetch_company_news(company: str, max_articles: int = 8) -> list[dict]:
             articles = []
             for item in items[:max_articles]:
                 title = re.search(r"<title><!\[CDATA\[(.*?)\]\]></title>", item)
-                link  = re.search(r"<link>(.*?)</link>", item)
-                pub   = re.search(r"<pubDate>(.*?)</pubDate>", item)
-                src   = re.search(r"<source[^>]*>(.*?)</source>", item)
+                link = re.search(r"<link>(.*?)</link>", item)
+                pub = re.search(r"<pubDate>(.*?)</pubDate>", item)
+                src = re.search(r"<source[^>]*>(.*?)</source>", item)
                 if title:
-                    articles.append({
-                        "title":  title.group(1).strip(),
-                        "url":    link.group(1).strip() if link else "",
-                        "date":   pub.group(1)[:16] if pub else "",
-                        "source": src.group(1).strip() if src else "Google News",
-                    })
+                    articles.append(
+                        {
+                            "title": title.group(1).strip(),
+                            "url": link.group(1).strip() if link else "",
+                            "date": pub.group(1)[:16] if pub else "",
+                            "source": src.group(1).strip() if src else "Google News",
+                        }
+                    )
             return articles
         except Exception:
             return []
+
     return _cached(f"news:{company}", _fetch)
 
 
 # ── Crunchbase (public search, no API key) ────────────────────────
 
+
 def fetch_crunchbase_signals(company: str) -> dict:
     """Scrape public Crunchbase org page for funding/employee signals."""
+
     def _fetch():
         slug = re.sub(r"[^a-z0-9]", "-", company.lower()).strip("-")
-        url  = f"https://www.crunchbase.com/organization/{slug}"
+        url = f"https://www.crunchbase.com/organization/{slug}"
         try:
             r = requests.get(url, headers=_HEADERS, timeout=12)
             text = r.text
             # Funding mentions
             funding_m = re.search(
                 r"total funding.*?\$([\d,.]+)\s*(M|B|K|million|billion|thousand)?",
-                text, re.IGNORECASE
+                text,
+                re.IGNORECASE,
             )
             funding = ""
             if funding_m:
@@ -98,8 +107,7 @@ def fetch_crunchbase_signals(company: str) -> dict:
 
             # Employee count range
             emp_m = re.search(
-                r"([\d,]+)[-–]?([\d,]+)?\s*(employees?|people|staff)",
-                text, re.IGNORECASE
+                r"([\d,]+)[-–]?([\d,]+)?\s*(employees?|people|staff)", text, re.IGNORECASE
             )
             employees = emp_m.group(0)[:40] if emp_m else ""
 
@@ -110,13 +118,16 @@ def fetch_crunchbase_signals(company: str) -> dict:
             return {"funding": funding, "employees": employees, "founded": founded, "url": url}
         except Exception:
             return {}
+
     return _cached(f"cb:{company}", _fetch)
 
 
 # ── HackerNews mention search ─────────────────────────────────────
 
+
 def fetch_hn_mentions(company: str, max_results: int = 5) -> list[dict]:
     """Search HackerNews for recent mentions of this company."""
+
     def _fetch():
         try:
             r = requests.get(
@@ -127,26 +138,34 @@ def fetch_hn_mentions(company: str, max_results: int = 5) -> list[dict]:
             r.raise_for_status()
             results = []
             for hit in r.json().get("hits", []):
-                results.append({
-                    "title":  hit.get("title", ""),
-                    "url":    hit.get("url") or f"https://news.ycombinator.com/item?id={hit.get('objectID','')}",
-                    "points": hit.get("points", 0),
-                    "date":   (hit.get("created_at") or "")[:10],
-                })
+                results.append(
+                    {
+                        "title": hit.get("title", ""),
+                        "url": hit.get("url")
+                        or f"https://news.ycombinator.com/item?id={hit.get('objectID', '')}",
+                        "points": hit.get("points", 0),
+                        "date": (hit.get("created_at") or "")[:10],
+                    }
+                )
             return results
         except Exception:
             return []
+
     return _cached(f"hn:{company}", _fetch)
 
 
 # ── Tech stack signals via BuiltWith-style header scraping ─────────
 
+
 def fetch_tech_signals(company_website: str) -> list[str]:
     """Detect tech signals from a company's public website headers and HTML."""
+
     def _fetch():
         if not company_website:
             return []
-        url = company_website if company_website.startswith("http") else f"https://{company_website}"
+        url = (
+            company_website if company_website.startswith("http") else f"https://{company_website}"
+        )
         try:
             r = requests.get(url, headers=_HEADERS, timeout=10, allow_redirects=True)
             signals = set()
@@ -154,45 +173,51 @@ def fetch_tech_signals(company_website: str) -> list[str]:
             headers = {k.lower(): v.lower() for k, v in r.headers.items()}
             server = headers.get("server", "")
             powered = headers.get("x-powered-by", "")
-            if "nginx" in server:    signals.add("nginx")
-            if "apache" in server:   signals.add("apache")
-            if "cloudflare" in server: signals.add("Cloudflare")
-            if "php" in powered:     signals.add("PHP")
-            if "express" in powered: signals.add("Node.js/Express")
-            if "next.js" in powered: signals.add("Next.js")
+            if "nginx" in server:
+                signals.add("nginx")
+            if "apache" in server:
+                signals.add("apache")
+            if "cloudflare" in server:
+                signals.add("Cloudflare")
+            if "php" in powered:
+                signals.add("PHP")
+            if "express" in powered:
+                signals.add("Node.js/Express")
+            if "next.js" in powered:
+                signals.add("Next.js")
             # HTML content
             text = r.text.lower()
             _tech_map = {
-                "react":           "React",
-                "vue":             "Vue.js",
-                "angular":         "Angular",
-                "next.js":         "Next.js",
-                "gatsby":          "Gatsby",
-                "webpack":         "Webpack",
-                "graphql":         "GraphQL",
-                "apollo":          "Apollo/GraphQL",
-                "stripe":          "Stripe (payments)",
-                "segment":         "Segment (analytics)",
-                "intercom":        "Intercom (support)",
-                "datadog":         "Datadog (monitoring)",
-                "sentry":          "Sentry (error tracking)",
-                "amplitude":       "Amplitude (analytics)",
-                "hubspot":         "HubSpot (CRM)",
-                "salesforce":      "Salesforce (CRM)",
-                "kubernetes":      "Kubernetes",
-                "docker":          "Docker",
-                "aws":             "AWS",
-                "vercel":          "Vercel",
-                "supabase":        "Supabase",
-                "firebase":        "Firebase",
-                "algolia":         "Algolia (search)",
-                "twilio":          "Twilio (comms)",
-                "openai":          "OpenAI API",
-                "anthropic":       "Anthropic/Claude",
-                "langchain":       "LangChain",
-                "pinecone":        "Pinecone (vector DB)",
-                "postgres":        "PostgreSQL",
-                "mongodb":         "MongoDB",
+                "react": "React",
+                "vue": "Vue.js",
+                "angular": "Angular",
+                "next.js": "Next.js",
+                "gatsby": "Gatsby",
+                "webpack": "Webpack",
+                "graphql": "GraphQL",
+                "apollo": "Apollo/GraphQL",
+                "stripe": "Stripe (payments)",
+                "segment": "Segment (analytics)",
+                "intercom": "Intercom (support)",
+                "datadog": "Datadog (monitoring)",
+                "sentry": "Sentry (error tracking)",
+                "amplitude": "Amplitude (analytics)",
+                "hubspot": "HubSpot (CRM)",
+                "salesforce": "Salesforce (CRM)",
+                "kubernetes": "Kubernetes",
+                "docker": "Docker",
+                "aws": "AWS",
+                "vercel": "Vercel",
+                "supabase": "Supabase",
+                "firebase": "Firebase",
+                "algolia": "Algolia (search)",
+                "twilio": "Twilio (comms)",
+                "openai": "OpenAI API",
+                "anthropic": "Anthropic/Claude",
+                "langchain": "LangChain",
+                "pinecone": "Pinecone (vector DB)",
+                "postgres": "PostgreSQL",
+                "mongodb": "MongoDB",
             }
             for keyword, label in _tech_map.items():
                 if keyword in text:
@@ -200,13 +225,16 @@ def fetch_tech_signals(company_website: str) -> list[str]:
             return sorted(signals)[:15]
         except Exception:
             return []
+
     return _cached(f"tech:{company_website}", _fetch)
 
 
 # ── Glassdoor rating via public search ───────────────────────────
 
+
 def fetch_glassdoor_signals(company: str) -> dict:
     """Try to find Glassdoor rating from public search result snippets."""
+
     def _fetch():
         try:
             url = f"https://www.glassdoor.com/Search/results.htm?keyword={requests.utils.quote(company)}"
@@ -217,13 +245,16 @@ def fetch_glassdoor_signals(company: str) -> dict:
             return {}
         except Exception:
             return {}
+
     return _cached(f"gd:{company}", _fetch)
 
 
 # ── Job posting velocity (via Jobicy) ────────────────────────────
 
+
 def fetch_hiring_velocity(company: str) -> dict:
     """Count current open postings for this company as a hiring signal."""
+
     def _fetch():
         try:
             r = requests.get(
@@ -240,10 +271,12 @@ def fetch_hiring_velocity(company: str) -> dict:
             }
         except Exception:
             return {"open_roles": 0, "sample_roles": []}
+
     return _cached(f"vel:{company}", _fetch)
 
 
 # ── Claude synthesis ──────────────────────────────────────────────
+
 
 def synthesize_dossier(
     company: str,
@@ -261,40 +294,55 @@ def synthesize_dossier(
     likely_interview_qs, company_stage, recruiter_angle.
     """
     import json
+
     from claude_ai import _get_client, _sanitize
 
-    resume_ctx  = _sanitize(resume_text, 1500)
-    company_s   = _sanitize(company, 100)
-    role_s      = _sanitize(role, 100)
+    resume_ctx = _sanitize(resume_text, 1500)
+    company_s = _sanitize(company, 100)
+    role_s = _sanitize(role, 100)
 
-    news_text = "\n".join(
-        f"- [{a['date']}] {a['title']} ({a['source']})" for a in news[:6]
-    ) or "No recent news found."
+    news_text = (
+        "\n".join(f"- [{a['date']}] {a['title']} ({a['source']})" for a in news[:6])
+        or "No recent news found."
+    )
 
-    hn_text = "\n".join(
-        f"- [{h['date']}] {h['title']} ({h['points']} pts)" for h in hn_mentions[:4]
-    ) or "No HN mentions."
+    hn_text = (
+        "\n".join(f"- [{h['date']}] {h['title']} ({h['points']} pts)" for h in hn_mentions[:4])
+        or "No HN mentions."
+    )
 
     cb_text = (
-        f"Funding: {cb_signals.get('funding','unknown')} | "
-        f"Employees: {cb_signals.get('employees','unknown')} | "
-        f"Founded: {cb_signals.get('founded','unknown')}"
-    ) if cb_signals else "No Crunchbase data found."
+        (
+            f"Funding: {cb_signals.get('funding', 'unknown')} | "
+            f"Employees: {cb_signals.get('employees', 'unknown')} | "
+            f"Founded: {cb_signals.get('founded', 'unknown')}"
+        )
+        if cb_signals
+        else "No Crunchbase data found."
+    )
 
     tech_text = ", ".join(tech_signals) if tech_signals else "Could not detect tech stack."
 
     hiring_text = (
-        f"{hiring.get('open_roles', 0)} open roles detected. "
-        f"Sample: {', '.join(hiring.get('sample_roles', []))}"
-    ) if hiring.get("open_roles") else "No current job postings found via Jobicy."
+        (
+            f"{hiring.get('open_roles', 0)} open roles detected. "
+            f"Sample: {', '.join(hiring.get('sample_roles', []))}"
+        )
+        if hiring.get("open_roles")
+        else "No current job postings found via Jobicy."
+    )
 
     client = _get_client()
     if client is None:
         return {
             "summary": "Claude API not available — add ANTHROPIC_API_KEY to .env",
-            "culture_read": "", "why_apply": "", "red_flags": [],
-            "talking_points": [], "likely_interview_qs": [],
-            "company_stage": "", "recruiter_angle": "",
+            "culture_read": "",
+            "why_apply": "",
+            "red_flags": [],
+            "talking_points": [],
+            "likely_interview_qs": [],
+            "company_stage": "",
+            "recruiter_angle": "",
         }
 
     system = (
@@ -320,7 +368,7 @@ HIRING VELOCITY:
 {hiring_text}
 
 CANDIDATE RESUME (for tailoring):
-{resume_ctx or 'Not provided'}
+{resume_ctx or "Not provided"}
 
 Return a JSON object with exactly these keys:
 - "summary": string — 2-3 sentence company overview: what they do, stage, momentum (cite specific news if relevant)
@@ -353,13 +401,18 @@ Return ONLY valid JSON."""
         pass
     return {
         "summary": "Analysis failed — try again.",
-        "culture_read": "", "why_apply": [], "red_flags": [],
-        "talking_points": [], "likely_interview_qs": [],
-        "company_stage": "unknown", "recruiter_angle": "",
+        "culture_read": "",
+        "why_apply": [],
+        "red_flags": [],
+        "talking_points": [],
+        "likely_interview_qs": [],
+        "company_stage": "unknown",
+        "recruiter_angle": "",
     }
 
 
 # ── Main entry point ──────────────────────────────────────────────
+
 
 def research_company(
     company: str,
@@ -387,20 +440,20 @@ def research_company(
 
     # Concurrent data fetch
     with concurrent.futures.ThreadPoolExecutor(max_workers=5) as pool:
-        f_news    = pool.submit(fetch_company_news, company)
-        f_cb      = pool.submit(fetch_crunchbase_signals, company)
-        f_hn      = pool.submit(fetch_hn_mentions, company)
-        f_tech    = pool.submit(fetch_tech_signals, company_website) if company_website else None
-        f_hiring  = pool.submit(fetch_hiring_velocity, company)
+        f_news = pool.submit(fetch_company_news, company)
+        f_cb = pool.submit(fetch_crunchbase_signals, company)
+        f_hn = pool.submit(fetch_hn_mentions, company)
+        f_tech = pool.submit(fetch_tech_signals, company_website) if company_website else None
+        f_hiring = pool.submit(fetch_hiring_velocity, company)
 
         _cb("Pulling HackerNews signals…", 30)
-        news    = f_news.result()
+        news = f_news.result()
         _cb("Checking funding data…", 50)
         cb_data = f_cb.result()
         hn_data = f_hn.result()
-        tech    = f_tech.result() if f_tech else []
+        tech = f_tech.result() if f_tech else []
         _cb("Analyzing hiring velocity…", 70)
-        hiring  = f_hiring.result()
+        hiring = f_hiring.result()
 
     _cb("Synthesizing with Claude Sonnet…", 85)
 
@@ -420,13 +473,13 @@ def research_company(
     return {
         **dossier,
         "raw": {
-            "news":    news,
-            "hn":      hn_data,
-            "cb":      cb_data,
-            "tech":    tech,
-            "hiring":  hiring,
+            "news": news,
+            "hn": hn_data,
+            "cb": cb_data,
+            "tech": tech,
+            "hiring": hiring,
         },
         "company": company,
-        "role":    role,
+        "role": role,
         "fetched_at": datetime.utcnow().strftime("%Y-%m-%d %H:%M UTC"),
     }

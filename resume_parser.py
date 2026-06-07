@@ -1,113 +1,195 @@
-import re
 import datetime
-import pdfplumber
+import re
+
 import docx as _docx
+import pdfplumber
 
 # ── Skill aliases ─────────────────────────────────────────────────
 # Maps abbreviations/alternate forms → canonical skill name in COMMON_SKILLS.
 # Applied during parsing so "ML engineer" → matched as "scikit-learn" etc. is
 # handled at scoring time, and abbreviations show up in the skills list.
 SKILL_ALIASES: dict[str, str] = {
-    "ml":             "scikit-learn",   # generic ML → closest canonical
-    "ai":             "tensorflow",
-    "js":             "javascript",
-    "ts":             "typescript",
-    "py":             "python",
-    "rb":             "ruby",
-    "k8s":            "kubernetes",
-    "k8":             "kubernetes",
-    "tf":             "terraform",
-    "tf2":            "tensorflow",
-    "pg":             "postgresql",
-    "postgres":       "postgresql",
-    "mongo":          "mongodb",
-    "es":             "elasticsearch",
-    "elastic":        "elasticsearch",
-    "sklearn":        "scikit-learn",
-    "scikit":         "scikit-learn",
-    "torch":          "pytorch",
-    "node":           "node.js",
-    "nodejs":         "node.js",
-    "next":           "next.js",
-    "nextjs":         "next.js",
-    "vue.js":         "vue",
-    "vuejs":          "vue",
-    "angularjs":      "angular",
-    "gke":            "kubernetes",
-    "eks":            "kubernetes",
-    "gcs":            "gcp",
-    "google cloud":   "gcp",
-    "amazon web":     "aws",
-    "azure cloud":    "azure",
-    "mssql":          "sql",
-    "t-sql":          "sql",
-    "plsql":          "sql",
-    "pl/sql":         "sql",
-    "powerbi":        "power bi",
-    "looker studio":       "looker",
-    "google looker":       "looker",
-    "dask":                "pandas",
-    "xgboost":             "scikit-learn",
-    "lightgbm":            "scikit-learn",
-    "bash script":         "bash",
-    "shell":               "bash",
-    "linux/unix":          "linux",
-    "unix":                "linux",
-    "agile/scrum":         "agile",
-    "google ads":          "google analytics",
-    "ga4":                 "google analytics",
-    "hubspot":             "salesforce",
-    "github":              "git",
-    "gitlab":              "git",
-    "bitbucket":           "git",
-    "sketch":              "figma",
-    "adobe xd":            "figma",
-    "google sheets":       "excel",
-    "gsheets":             "excel",
-    "ms excel":            "excel",
-    "microsoft excel":     "excel",
-    "vba":                 "excel",
-    "snowflake":           "sql",
-    "redshift":            "sql",
-    "bigquery":            "sql",
-    "databricks":          "spark",
-    "pyspark":             "spark",
-    "ms sql server":       "sql",
-    "microsoft sql":       "sql",
-    "oracle sql":          "sql",
-    "spss":                "statistics",
-    "stata":               "statistics",
-    "sas":                 "statistics",
-    "microsoft power bi":  "power bi",
+    "ml": "machine learning",
+    "ai": "machine learning",
+    "js": "javascript",
+    "ts": "typescript",
+    "py": "python",
+    "rb": "ruby",
+    "k8s": "kubernetes",
+    "k8": "kubernetes",
+    "tf": "terraform",
+    "tf2": "tensorflow",
+    "pg": "postgresql",
+    "postgres": "postgresql",
+    "mongo": "mongodb",
+    "es": "elasticsearch",
+    "elastic": "elasticsearch",
+    "sklearn": "scikit-learn",
+    "scikit": "scikit-learn",
+    "torch": "pytorch",
+    "node": "node.js",
+    "nodejs": "node.js",
+    "next": "next.js",
+    "nextjs": "next.js",
+    "vue.js": "vue",
+    "vuejs": "vue",
+    "angularjs": "angular",
+    "gke": "kubernetes",
+    "eks": "kubernetes",
+    "gcs": "gcp",
+    "google cloud": "gcp",
+    "amazon web": "aws",
+    "azure cloud": "azure",
+    "mssql": "sql",
+    "t-sql": "sql",
+    "plsql": "sql",
+    "pl/sql": "sql",
+    "powerbi": "power bi",
+    "looker studio": "looker",
+    "google looker": "looker",
+    "dask": "pandas",
+    "xgb": "xgboost",
+    "lgbm": "lightgbm",
+    "bash script": "bash",
+    "shell": "bash",
+    "linux/unix": "linux",
+    "unix": "linux",
+    "agile/scrum": "agile",
+    "google ads": "google analytics",
+    "ga4": "google analytics",
+    "hubspot crm": "hubspot",
+    "github": "git",
+    "gitlab": "git",
+    "bitbucket": "git",
+    "sketch": "figma",
+    "adobe xd": "figma",
+    "google sheets": "excel",
+    "gsheets": "excel",
+    "ms excel": "excel",
+    "microsoft excel": "excel",
+    "vba": "excel",
+    "snowflake": "sql",
+    "redshift": "sql",
+    "bigquery": "sql",
+    "databricks": "spark",
+    "pyspark": "spark",
+    "ms sql server": "sql",
+    "microsoft sql": "sql",
+    "oracle sql": "sql",
+    "spss": "statistics",
+    "stata": "statistics",
+    "sas": "statistics",
+    "microsoft power bi": "power bi",
 }
 
 COMMON_SKILLS = [
     # Languages
-    "python", "javascript", "typescript", "java", "c++", "c#", "golang", "rust",
-    "ruby", "php", "swift", "kotlin", "r programming", "scala", "matlab", "bash", "sql",
+    "python",
+    "javascript",
+    "typescript",
+    "java",
+    "c++",
+    "c#",
+    "golang",
+    "rust",
+    "ruby",
+    "php",
+    "swift",
+    "kotlin",
+    "r programming",
+    "scala",
+    "matlab",
+    "bash",
+    "sql",
     # Web / Frontend
-    "react", "angular", "vue", "node.js", "django", "flask", "fastapi",
-    "express", "html", "css", "rest api", "graphql", "next.js",
+    "react",
+    "angular",
+    "vue",
+    "node.js",
+    "django",
+    "flask",
+    "fastapi",
+    "express",
+    "html",
+    "css",
+    "rest api",
+    "graphql",
+    "next.js",
     # Data / ML
-    "postgresql", "mysql", "mongodb", "redis", "elasticsearch",
-    "pandas", "numpy", "scikit-learn", "tensorflow", "pytorch", "keras",
-    "spark", "hadoop", "airflow", "dbt", "tableau", "power bi", "looker",
+    "postgresql",
+    "mysql",
+    "mongodb",
+    "redis",
+    "elasticsearch",
+    "pandas",
+    "numpy",
+    "scikit-learn",
+    "tensorflow",
+    "pytorch",
+    "keras",
+    "xgboost",
+    "lightgbm",
+    "machine learning",
+    "deep learning",
+    "artificial intelligence",
+    "spark",
+    "hadoop",
+    "airflow",
+    "dbt",
+    "tableau",
+    "power bi",
+    "looker",
     # Cloud / DevOps
-    "aws", "azure", "gcp", "docker", "kubernetes", "terraform", "ansible",
-    "jenkins", "git", "linux", "ci/cd",
+    "aws",
+    "azure",
+    "gcp",
+    "docker",
+    "kubernetes",
+    "terraform",
+    "ansible",
+    "jenkins",
+    "git",
+    "linux",
+    "ci/cd",
     # Business / Finance
-    "excel", "financial modeling", "bloomberg", "valuation", "accounting",
-    "google analytics", "salesforce", "jira", "agile", "scrum",
+    "excel",
+    "financial modeling",
+    "bloomberg",
+    "valuation",
+    "accounting",
+    "google analytics",
+    "salesforce",
+    "hubspot",
+    "jira",
+    "agile",
+    "scrum",
     # Analytics / Research
-    "data analysis", "data visualization", "statistics", "a/b testing",
-    "market research", "forecasting", "business intelligence", "reporting",
+    "data analysis",
+    "data visualization",
+    "statistics",
+    "a/b testing",
+    "market research",
+    "forecasting",
+    "business intelligence",
+    "reporting",
     # Design / Product
-    "figma", "product management", "user research", "wireframing",
-    "product strategy", "roadmapping",
+    "figma",
+    "product management",
+    "user research",
+    "wireframing",
+    "product strategy",
+    "roadmapping",
     # Soft / Business skills (used in JD matching)
-    "project management", "stakeholder management", "communication",
-    "leadership", "collaboration", "problem solving", "presentation",
-    "strategic planning", "cross-functional", "negotiation",
+    "project management",
+    "stakeholder management",
+    "communication",
+    "leadership",
+    "collaboration",
+    "problem solving",
+    "presentation",
+    "strategic planning",
+    "cross-functional",
+    "negotiation",
 ]
 
 # ── Common job titles for extraction ────────────────────────────────
@@ -135,6 +217,7 @@ _CONTACT_LINE_RE = re.compile(r"@|\d{3}[\s.\-]\d{3}|linkedin|github|http|www\.",
 
 
 # ── File text extraction ───────────────────────────────────────────
+
 
 def _col_to_text(words: list) -> str:
     """Reconstruct readable lines from a list of pdfplumber word dicts."""
@@ -172,7 +255,7 @@ def _extract_page_text(page) -> str:
     crossing = sum(1 for w in words if w["x0"] < mid < w["x1"])
 
     if len(words) > 10 and crossing / len(words) < 0.05:
-        left  = [w for w in words if w["x0"] < mid]
+        left = [w for w in words if w["x0"] < mid]
         right = [w for w in words if w["x0"] >= mid]
         if left and right and len(right) > len(words) * 0.10:
             return (_col_to_text(left) + "\n" + _col_to_text(right)).strip()
@@ -192,25 +275,26 @@ def extract_text(file_path: str) -> str:
                     if t:
                         parts.append(t)
         except Exception as e:
-            raise ValueError(f"Could not read PDF: {e}")
+            raise ValueError(f"Could not read PDF: {e}") from e
         return "\n".join(parts)
     elif ext in ("docx", "doc"):
         try:
             doc = _docx.Document(file_path)
             return "\n".join(p.text for p in doc.paragraphs if p.text.strip())
         except Exception as e:
-            raise ValueError(f"Could not read DOCX: {e}")
+            raise ValueError(f"Could not read DOCX: {e}") from e
     else:
         raise ValueError(f"Unsupported file type: .{ext}. Use PDF or DOCX.")
 
 
 # ── Resume parsing ─────────────────────────────────────────────────
 
+
 def _resolve_aliases(text_lower: str, skills: list) -> list:
     """Expand alias tokens found in text into canonical skill names."""
     extra = []
     for alias, canonical in SKILL_ALIASES.items():
-        if re.search(r'\b' + re.escape(alias) + r'\b', text_lower):
+        if re.search(r"\b" + re.escape(alias) + r"\b", text_lower):
             if canonical not in skills and canonical not in extra:
                 extra.append(canonical)
     return extra
@@ -239,7 +323,7 @@ def parse_resume(text: str) -> dict:
         skill_l = skill.lower()
         # Word-boundary for short skills to avoid false positives
         if len(skill_l) <= 4 and skill_l.isalpha():
-            if re.search(r'\b' + re.escape(skill_l) + r'\b', text_lower):
+            if re.search(r"\b" + re.escape(skill_l) + r"\b", text_lower):
                 skills.append(skill)
         else:
             if skill_l in text_lower:
@@ -265,50 +349,68 @@ def parse_resume(text: str) -> dict:
         years_experience = int(m.group(1))
     else:
         # Count date ranges like "2020–2024" or "2020 - Present"
-        date_ranges = re.findall(
-            r"(\d{4})\s*[–\-—]\s*(present|\d{4})",
-            text, re.IGNORECASE
-        )
+        date_ranges = re.findall(r"(\d{4})\s*[–\-—]\s*(present|\d{4})", text, re.IGNORECASE)
         current_year = datetime.date.today().year
-        total = 0
+        intervals = []
         for start, end in date_ranges:
             try:
                 s = int(start)
                 e = current_year if end.lower() == "present" else int(end)
                 if 1990 <= s <= current_year and s <= e <= current_year:
-                    total += e - s
+                    intervals.append([s, e])
             except ValueError:
                 pass
-        years_experience = min(total, 40)
+        # Merge overlapping intervals so two concurrent jobs (e.g. 2020-2023 and
+        # 2020-2022) count as 3 years, not 5.
+        intervals.sort()
+        merged = []
+        for s, e in intervals:
+            if merged and s <= merged[-1][1]:
+                merged[-1][1] = max(merged[-1][1], e)
+            else:
+                merged.append([s, e])
+        years_experience = min(sum(e - s for s, e in merged), 40)
 
     # ── Contact info ────────────────────────────────────────────────
     email_m = _EMAIL_RE.search(text)
-    email   = email_m.group(0) if email_m else ""
+    email = email_m.group(0) if email_m else ""
 
     phone_m = _PHONE_RE.search(text)
-    phone   = phone_m.group(0) if phone_m else ""
+    phone = phone_m.group(0) if phone_m else ""
 
     # ── Name: first non-empty non-contact line, title-cased ─────────
     name = ""
     for line in text.splitlines():
         stripped = line.strip()
-        if (stripped
-                and len(stripped) >= 4
-                and len(stripped) <= 50
-                and not _CONTACT_LINE_RE.search(stripped)
-                and not re.match(r"^\d", stripped)
-                and not any(stripped.lower().startswith(k) for k in
-                            ("education", "experience", "skills", "summary",
-                             "objective", "work", "projects", "resume"))):
+        if (
+            stripped
+            and len(stripped) >= 4
+            and len(stripped) <= 50
+            and not _CONTACT_LINE_RE.search(stripped)
+            and not re.match(r"^\d", stripped)
+            and not any(
+                stripped.lower().startswith(k)
+                for k in (
+                    "education",
+                    "experience",
+                    "skills",
+                    "summary",
+                    "objective",
+                    "work",
+                    "projects",
+                    "resume",
+                )
+            )
+        ):
             name = stripped
             break
 
     return {
-        "raw_text":         text,
-        "name":             name,
-        "email":            email,
-        "phone":            phone,
-        "skills":           skills,
-        "titles":           titles,
+        "raw_text": text,
+        "name": name,
+        "email": email,
+        "phone": phone,
+        "skills": skills,
+        "titles": titles,
         "years_experience": years_experience,
     }

@@ -15,24 +15,23 @@ Service and will result in account restrictions. This tool enforces:
 - Session-level caps (default 20 applications per session max)
 """
 
+import logging
 import os
 import re
 import time
-import json
-import logging
-from datetime import datetime
-from typing import Generator
+from collections.abc import Generator
 
 _log = logging.getLogger(__name__)
 
 # ── Constants ─────────────────────────────────────────────────────
-_MIN_DELAY_SEC  = 30
+_MIN_DELAY_SEC = 30
 _MAX_PER_SESSION = 20
-_LINKEDIN_BASE  = "https://www.linkedin.com"
+_LINKEDIN_BASE = "https://www.linkedin.com"
 
 # ── Credential helpers ────────────────────────────────────────────
 
 # ── Browser session ────────────────────────────────────────────────
+
 
 class LinkedInSession:
     """
@@ -51,9 +50,10 @@ class LinkedInSession:
 
     def start(self):
         from playwright.sync_api import sync_playwright
-        self._pw      = sync_playwright().__enter__()
+
+        self._pw = sync_playwright().__enter__()
         self._browser = self._pw.chromium.launch(headless=False, slow_mo=self._slow_mo)
-        context       = self._browser.new_context(
+        context = self._browser.new_context(
             viewport={"width": 1280, "height": 900},
             user_agent=(
                 "Mozilla/5.0 (Macintosh; Intel Mac OS X 10_15_7) "
@@ -117,12 +117,12 @@ class LinkedInSession:
             raise RuntimeError("Call login() first.")
 
         filters = filters or {}
-        page    = self._page
+        page = self._page
 
         # Build search URL
         params = {
             "keywords": role,
-            "f_AL":     "true",  # Easy Apply only
+            "f_AL": "true",  # Easy Apply only
         }
         if location:
             params["location"] = location
@@ -149,29 +149,31 @@ class LinkedInSession:
             cards = page.query_selector_all(".job-card-container")
             for card in cards:
                 try:
-                    title_el   = card.query_selector(".job-card-list__title")
+                    title_el = card.query_selector(".job-card-list__title")
                     company_el = card.query_selector(".job-card-container__company-name")
-                    loc_el     = card.query_selector(".job-card-container__metadata-item")
-                    link_el    = card.query_selector("a.job-card-container__link")
+                    loc_el = card.query_selector(".job-card-container__metadata-item")
+                    link_el = card.query_selector("a.job-card-container__link")
 
                     if not title_el or not link_el:
                         continue
 
-                    href    = link_el.get_attribute("href") or ""
-                    job_id  = re.search(r"/jobs/view/(\d+)", href)
-                    job_id  = job_id.group(1) if job_id else href[-20:]
+                    href = link_el.get_attribute("href") or ""
+                    job_id = re.search(r"/jobs/view/(\d+)", href)
+                    job_id = job_id.group(1) if job_id else href[-20:]
 
                     if job_id in seen:
                         continue
                     seen.add(job_id)
 
-                    jobs.append({
-                        "title":    title_el.inner_text().strip(),
-                        "company":  company_el.inner_text().strip() if company_el else "Unknown",
-                        "location": loc_el.inner_text().strip() if loc_el else location,
-                        "url":      f"{_LINKEDIN_BASE}{href}" if href.startswith("/") else href,
-                        "job_id":   job_id,
-                    })
+                    jobs.append(
+                        {
+                            "title": title_el.inner_text().strip(),
+                            "company": company_el.inner_text().strip() if company_el else "Unknown",
+                            "location": loc_el.inner_text().strip() if loc_el else location,
+                            "url": f"{_LINKEDIN_BASE}{href}" if href.startswith("/") else href,
+                            "job_id": job_id,
+                        }
+                    )
                 except Exception:
                     continue
 
@@ -212,7 +214,7 @@ class LinkedInSession:
             time.sleep(1.5)
 
             # Click "Easy Apply" button
-            easy_btn = page.query_selector('button.jobs-apply-button')
+            easy_btn = page.query_selector("button.jobs-apply-button")
             if not easy_btn:
                 return {"success": False, "message": "No Easy Apply button found"}
             easy_btn.click()
@@ -221,9 +223,11 @@ class LinkedInSession:
             steps_completed = 0
 
             # Handle multi-step form (up to 10 steps)
-            for step in range(10):
+            for _step in range(10):
                 # Fill text inputs if they map to known profile fields
-                inputs = page.query_selector_all("input[type='text'], input[type='tel'], input[type='email']")
+                inputs = page.query_selector_all(
+                    "input[type='text'], input[type='tel'], input[type='email']"
+                )
                 for inp in inputs:
                     label_text = ""
                     try:
@@ -260,7 +264,10 @@ class LinkedInSession:
                     for ta in textareas:
                         try:
                             placeholder = (ta.get_attribute("placeholder") or "").lower()
-                            if any(kw in placeholder for kw in ("cover", "letter", "tell us", "message")):
+                            if any(
+                                kw in placeholder
+                                for kw in ("cover", "letter", "tell us", "message")
+                            ):
                                 ta.fill(cover_letter[:2000])
                                 break
                         except Exception:
@@ -269,7 +276,7 @@ class LinkedInSession:
                 steps_completed += 1
 
                 # Check for Next / Review / Submit
-                next_btn   = page.query_selector('button[aria-label="Continue to next step"]')
+                next_btn = page.query_selector('button[aria-label="Continue to next step"]')
                 review_btn = page.query_selector('button[aria-label="Review your application"]')
                 submit_btn = page.query_selector('button[aria-label="Submit application"]')
 
@@ -308,6 +315,7 @@ class LinkedInSession:
 
 # ── High-level runner ──────────────────────────────────────────────
 
+
 def run_apply_session(
     role: str,
     location: str,
@@ -335,8 +343,8 @@ def run_apply_session(
     Yields progress dicts: {job, score, status, cover_letter, result}
     confirm_callback must be synchronous (called from main thread).
     """
-    from scorer import score_job
     from claude_ai import generate_cover_letter_claude
+    from scorer import score_job
 
     applied_count = 0
     filters = {}
@@ -350,7 +358,7 @@ def run_apply_session(
             except Exception:
                 pass
 
-    _email    = email    or os.getenv("LINKEDIN_EMAIL", "")
+    _email = email or os.getenv("LINKEDIN_EMAIL", "")
     _password = password or os.getenv("LINKEDIN_PASSWORD", "")
     if not _email or not _password:
         yield {"error": "LinkedIn credentials required. Enter your email and password in the app."}
@@ -398,8 +406,11 @@ def run_apply_session(
             approved = confirm_callback(job, score, cl)
             if not approved:
                 yield {
-                    "job": job, "score": score, "status": "skipped",
-                    "cover_letter": cl, "result": None,
+                    "job": job,
+                    "score": score,
+                    "status": "skipped",
+                    "cover_letter": cl,
+                    "result": None,
                 }
                 continue
 
@@ -408,11 +419,11 @@ def run_apply_session(
 
             applied_count += 1
             yield {
-                "job":          job,
-                "score":        score,
-                "status":       "applied" if result.get("success") else "failed",
+                "job": job,
+                "score": score,
+                "status": "applied" if result.get("success") else "failed",
                 "cover_letter": cl,
-                "result":       result,
+                "result": result,
             }
 
             if result.get("success") and not dry_run:

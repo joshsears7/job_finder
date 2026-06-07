@@ -1,35 +1,40 @@
 """
 Tests for tracker.py — SQLite operations using a temp DB via conftest.tmp_db.
 """
-import pytest
+
 from tests.conftest import SAMPLE_JOB
 
-
 # ── save_job / is_saved / get_all ─────────────────────────────────────────────
+
 
 class TestSaveAndRead:
     def test_save_new_job(self, tmp_db):
         import tracker as tr
+
         result = tr.save_job(SAMPLE_JOB, score=78)
         assert result is True
 
     def test_duplicate_save_returns_false(self, tmp_db):
         import tracker as tr
+
         tr.save_job(SAMPLE_JOB, score=78)
         result = tr.save_job(SAMPLE_JOB, score=78)
         assert result is False
 
     def test_is_saved_after_save(self, tmp_db):
         import tracker as tr
+
         tr.save_job(SAMPLE_JOB, score=78)
         assert tr.is_saved(SAMPLE_JOB["id"]) is True
 
     def test_is_saved_returns_false_before_save(self, tmp_db):
         import tracker as tr
+
         assert tr.is_saved("nonexistent-job-xyz") is False
 
     def test_get_all_returns_saved_job(self, tmp_db):
         import tracker as tr
+
         tr.save_job(SAMPLE_JOB, score=78)
         apps = tr.get_all()
         assert len(apps) == 1
@@ -38,16 +43,19 @@ class TestSaveAndRead:
 
     def test_get_all_empty_db(self, tmp_db):
         import tracker as tr
+
         assert tr.get_all() == []
 
     def test_save_with_resume_version(self, tmp_db):
         import tracker as tr
+
         tr.save_job(SAMPLE_JOB, score=80, resume_version="v2-finance")
         apps = tr.get_all()
         assert apps[0]["resume_version"] == "v2-finance"
 
     def test_save_preserves_salary(self, tmp_db):
         import tracker as tr
+
         tr.save_job(SAMPLE_JOB, score=80)
         apps = tr.get_all()
         assert apps[0]["salary_min"] == SAMPLE_JOB["salary_min"]
@@ -56,9 +64,11 @@ class TestSaveAndRead:
 
 # ── update_status ─────────────────────────────────────────────────────────────
 
+
 class TestUpdateStatus:
     def test_status_update(self, tmp_db):
         import tracker as tr
+
         tr.save_job(SAMPLE_JOB, score=78)
         app_id = tr.get_all()[0]["id"]
         tr.update_status(app_id, "applied")
@@ -67,6 +77,7 @@ class TestUpdateStatus:
 
     def test_applied_status_sets_date_applied(self, tmp_db):
         import tracker as tr
+
         tr.save_job(SAMPLE_JOB, score=78)
         app_id = tr.get_all()[0]["id"]
         tr.update_status(app_id, "applied")
@@ -75,10 +86,10 @@ class TestUpdateStatus:
 
     def test_applied_schedules_followup(self, tmp_db):
         import tracker as tr
+
         tr.save_job(SAMPLE_JOB, score=78)
         app_id = tr.get_all()[0]["id"]
         tr.update_status(app_id, "applied")
-        due = tr.get_due_followups(user_id=1)
         # Follow-up is due in 7 days; get_due_followups only shows overdue or today
         # so we check get_all_followups instead
         all_fu = tr.get_all_followups(user_id=1)
@@ -86,6 +97,7 @@ class TestUpdateStatus:
 
     def test_notes_update(self, tmp_db):
         import tracker as tr
+
         tr.save_job(SAMPLE_JOB, score=78)
         app_id = tr.get_all()[0]["id"]
         tr.update_status(app_id, "saved", notes="Strong fit — apply this week")
@@ -94,6 +106,7 @@ class TestUpdateStatus:
 
     def test_interview_status(self, tmp_db):
         import tracker as tr
+
         tr.save_job(SAMPLE_JOB, score=78)
         app_id = tr.get_all()[0]["id"]
         tr.update_status(app_id, "interview")
@@ -102,9 +115,11 @@ class TestUpdateStatus:
 
 # ── delete_app ────────────────────────────────────────────────────────────────
 
+
 class TestDeleteApp:
     def test_delete_removes_job(self, tmp_db):
         import tracker as tr
+
         tr.save_job(SAMPLE_JOB, score=78)
         app_id = tr.get_all()[0]["id"]
         tr.delete_app(app_id)
@@ -112,10 +127,12 @@ class TestDeleteApp:
 
     def test_delete_nonexistent_no_crash(self, tmp_db):
         import tracker as tr
+
         tr.delete_app(99999)  # should not raise
 
     def test_is_saved_false_after_delete(self, tmp_db):
         import tracker as tr
+
         tr.save_job(SAMPLE_JOB, score=78)
         app_id = tr.get_all()[0]["id"]
         tr.delete_app(app_id)
@@ -124,9 +141,11 @@ class TestDeleteApp:
 
 # ── Contacts / CRM ────────────────────────────────────────────────────────────
 
+
 class TestContacts:
     def test_save_and_get_contact(self, tmp_db):
         import tracker as tr
+
         tr.save_contact(
             name="Sarah Johnson",
             company="Goldman Sachs",
@@ -144,9 +163,17 @@ class TestContacts:
 
     def test_update_contact(self, tmp_db):
         import tracker as tr
+
         tr.save_contact(
-            name="Sarah Johnson", company="GS", role="VP", how_met="",
-            email="", linkedin="", status="warm", next_action="", notes="",
+            name="Sarah Johnson",
+            company="GS",
+            role="VP",
+            how_met="",
+            email="",
+            linkedin="",
+            status="warm",
+            next_action="",
+            notes="",
         )
         c_id = tr.get_contacts()[0]["id"]
         tr.update_contact(c_id, status="hot", next_action="Ask for intro", notes="Replied!")
@@ -156,9 +183,17 @@ class TestContacts:
 
     def test_delete_contact(self, tmp_db):
         import tracker as tr
+
         tr.save_contact(
-            name="Jane", company="Co", role="Eng", how_met="",
-            email="", linkedin="", status="cold", next_action="", notes="",
+            name="Jane",
+            company="Co",
+            role="Eng",
+            how_met="",
+            email="",
+            linkedin="",
+            status="cold",
+            next_action="",
+            notes="",
         )
         c_id = tr.get_contacts()[0]["id"]
         tr.delete_contact(c_id)

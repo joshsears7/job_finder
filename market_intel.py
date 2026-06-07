@@ -12,15 +12,16 @@ Sources:
 import os
 import re
 import time
-import requests
 from collections import Counter
 from concurrent.futures import ThreadPoolExecutor, as_completed
 from functools import lru_cache
 
+import requests
+
 from resume_parser import COMMON_SKILLS
 
 _CACHE_TTL = 4 * 3600  # 4 hours
-_mem_cache: dict = {}   # in-memory cache — no filesystem dependency
+_mem_cache: dict = {}  # in-memory cache — no filesystem dependency
 
 _HN_ALGOLIA = "https://hn.algolia.com/api/v1/search"
 _HN_FIREBASE = "https://hacker-news.firebaseio.com/v1/item"
@@ -28,27 +29,61 @@ _GH_SEARCH = "https://api.github.com/search/repositories"
 
 # Extra tech terms beyond COMMON_SKILLS worth tracking
 EXTRA_TERMS = [
-    "ai", "llm", "gpt", "machine learning", "ml", "nlp", "data science",
-    "blockchain", "web3", "solidity", "rust", "golang", "wasm",
-    "next.js", "remix", "svelte", "tailwind", "vercel", "supabase",
-    "openai", "langchain", "vector db", "rag", "fine-tuning",
-    "product manager", "growth", "fintech", "saas", "b2b",
-    "series a", "startup", "remote", "hybrid",
+    "ai",
+    "llm",
+    "gpt",
+    "machine learning",
+    "ml",
+    "nlp",
+    "data science",
+    "blockchain",
+    "web3",
+    "solidity",
+    "rust",
+    "golang",
+    "wasm",
+    "next.js",
+    "remix",
+    "svelte",
+    "tailwind",
+    "vercel",
+    "supabase",
+    "openai",
+    "langchain",
+    "vector db",
+    "rag",
+    "fine-tuning",
+    "product manager",
+    "growth",
+    "fintech",
+    "saas",
+    "b2b",
+    "series a",
+    "startup",
+    "remote",
+    "hybrid",
 ]
 
-ALL_TERMS = [t for t in dict.fromkeys(COMMON_SKILLS + EXTRA_TERMS) if t.strip()]  # deduplicated, no empties
+ALL_TERMS = [
+    t for t in dict.fromkeys(COMMON_SKILLS + EXTRA_TERMS) if t.strip()
+]  # deduplicated, no empties
 
 
 # ── HackerNews ──────────────────────────────────────────────────
 
+
 def get_hn_hiring_thread():
     """Return (story_id, title) for the most recent 'Who is Hiring?' post."""
     try:
-        r = requests.get(_HN_ALGOLIA, params={
-            "query": "Ask HN: Who is Hiring",
-            "tags": "story",
-            "hitsPerPage": 1,
-        }, timeout=10)
+        r = requests.get(
+            _HN_ALGOLIA,
+            params={
+                "query": "Ask HN: Who is Hiring",
+                "tags": "story",
+                "hitsPerPage": 1,
+            },
+            timeout=10,
+        )
         hits = r.json().get("hits", [])
         if hits:
             return hits[0].get("objectID"), hits[0].get("title", "")
@@ -87,7 +122,7 @@ def get_hn_comments(story_id, max_comments=60):
 @lru_cache(maxsize=64)
 def _term_pattern(term):
     """Compile a word-boundary regex for a skill term (cached per term)."""
-    return re.compile(r'\b' + re.escape(term) + r'\b', re.IGNORECASE)
+    return re.compile(r"\b" + re.escape(term) + r"\b", re.IGNORECASE)
 
 
 def count_terms(texts):
@@ -103,21 +138,29 @@ def count_terms(texts):
 
 # ── GitHub ───────────────────────────────────────────────────────
 
+
 def get_github_trending(days=30):
     """Repos with most new stars in the last N days (GitHub Search API)."""
-    from datetime import datetime as _dt, timedelta
+    from datetime import datetime as _dt
+    from datetime import timedelta
+
     since = (_dt.now() - timedelta(days=days)).strftime("%Y-%m-%d")
     gh_token = os.getenv("GITHUB_TOKEN", "")
     headers = {"Accept": "application/vnd.github.v3+json"}
     if gh_token:
         headers["Authorization"] = f"token {gh_token}"
     try:
-        r = requests.get(_GH_SEARCH, params={
-            "q": f"created:>{since} stars:>100",
-            "sort": "stars",
-            "order": "desc",
-            "per_page": 20,
-        }, headers=headers, timeout=10)
+        r = requests.get(
+            _GH_SEARCH,
+            params={
+                "q": f"created:>{since} stars:>100",
+                "sort": "stars",
+                "order": "desc",
+                "per_page": 20,
+            },
+            headers=headers,
+            timeout=10,
+        )
         if r.status_code == 403:
             # Rate limited — return empty gracefully
             return []
@@ -125,14 +168,16 @@ def get_github_trending(days=30):
         items = r.json().get("items", [])
         repos = []
         for item in items:
-            repos.append({
-                "name": item["full_name"],
-                "description": item.get("description") or "",
-                "language": item.get("language") or "Unknown",
-                "stars": item["stargazers_count"],
-                "topics": item.get("topics", []),
-                "url": item["html_url"],
-            })
+            repos.append(
+                {
+                    "name": item["full_name"],
+                    "description": item.get("description") or "",
+                    "language": item.get("language") or "Unknown",
+                    "stars": item["stargazers_count"],
+                    "topics": item.get("topics", []),
+                    "url": item["html_url"],
+                }
+            )
         return repos
     except Exception:
         return []
@@ -145,13 +190,17 @@ def count_languages(repos):
 
 # ── Jobicy aggregate ────────────────────────────────────────────
 
+
 def get_jobicy_skill_counts(roles=("software engineer", "data analyst", "product manager")):
     """Fetch a sample of Jobicy listings and count skill mentions."""
     all_text = []
     for role in roles:
         try:
-            r = requests.get("https://jobicy.com/api/v2/remote-jobs",
-                             params={"count": 20, "tag": role}, timeout=10)
+            r = requests.get(
+                "https://jobicy.com/api/v2/remote-jobs",
+                params={"count": 20, "tag": role},
+                timeout=10,
+            )
             for job in r.json().get("jobs", []):
                 desc = re.sub(r"<[^>]+>", " ", job.get("jobDescription", ""))
                 all_text.append(desc)
@@ -161,6 +210,7 @@ def get_jobicy_skill_counts(roles=("software engineer", "data analyst", "product
 
 
 # ── Main entry ──────────────────────────────────────────────────
+
 
 def get_market_intel():
     """

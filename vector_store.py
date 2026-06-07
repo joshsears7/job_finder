@@ -4,10 +4,12 @@ vector_store.py
 ChromaDB-backed vector store for job and resume embeddings.
 Enables semantic job search and persistent embedding cache.
 """
+
 import logging
+from pathlib import Path
+
 import chromadb
 from chromadb.utils.embedding_functions import SentenceTransformerEmbeddingFunction
-from pathlib import Path
 
 logger = logging.getLogger(__name__)
 
@@ -32,47 +34,75 @@ _resumes_col = _client.get_or_create_collection(
 
 # ── Job indexing ──────────────────────────────────────────────────
 
-def index_job(job_id: str, title: str, company: str, description: str,
-              source: str = "", location: str = "") -> None:
-    """Upsert a job into the vector store. Safe to call repeatedly."""
+
+def index_job(
+    job_id: str,
+    title: str,
+    company: str,
+    description: str,
+    source: str = "",
+    location: str = "",
+    user_id: str = "global",
+) -> None:
+    """Upsert a job into the vector store. Safe to call repeatedly.
+
+    user_id='global' means visible to all users (system-indexed public jobs).
+    Pass a specific user_id to scope a job to that user only.
+    """
     if not description.strip():
         return
     try:
         _jobs_col.upsert(
             ids=[job_id],
             documents=[description[:4000]],
-            metadatas=[{"title": title, "company": company,
-                        "source": source, "location": location}],
+            metadatas=[
+                {
+                    "title": title,
+                    "company": company,
+                    "source": source,
+                    "location": location,
+                    "user_id": user_id,
+                }
+            ],
         )
     except Exception as e:
         logger.warning("vector_store.index_job failed for %s: %s", job_id, e)
 
 
-def search_jobs(query: str, n_results: int = 10) -> list[dict]:
-    """Semantic search over indexed jobs. Returns list of {job_id, title, company, score}."""
+def search_jobs(query: str, n_results: int = 10, user_id: str | None = None) -> list[dict]:
+    """Semantic search over indexed jobs.
+
+    user_id: if provided, restricts to jobs tagged with that user_id OR 'global'.
+    Omit to search all jobs regardless of origin.
+    """
     if not query.strip():
         return []
     count = _jobs_col.count()
     if count == 0:
         return []
+    # Build where clause — include user's private jobs and all global (public) jobs
+    where = {"$or": [{"user_id": user_id}, {"user_id": "global"}]} if user_id else None
     try:
         res = _jobs_col.query(
             query_texts=[query[:2000]],
             n_results=min(n_results, count),
             include=["metadatas", "distances"],
+            where=where,
         )
         results = []
         for i, job_id in enumerate(res["ids"][0]):
             meta = res["metadatas"][0][i]
             distance = res["distances"][0][i]
             similarity = round((1 - distance) * 100, 1)
-            results.append({
-                "job_id": job_id,
-                "title": meta.get("title", ""),
-                "company": meta.get("company", ""),
-                "location": meta.get("location", ""),
-                "score": similarity,
-            })
+            results.append(
+                {
+                    "job_id": job_id,
+                    "title": meta.get("title", ""),
+                    "company": meta.get("company", ""),
+                    "location": meta.get("location", ""),
+                    "score": similarity,
+                }
+            )
         return results
     except Exception as e:
         logger.warning("vector_store.search_jobs failed: %s", e)
@@ -100,12 +130,14 @@ def get_similar_jobs(job_id: str, n_results: int = 5) -> list[dict]:
                 continue
             meta = res["metadatas"][0][i]
             distance = res["distances"][0][i]
-            results.append({
-                "job_id": rid,
-                "title": meta.get("title", ""),
-                "company": meta.get("company", ""),
-                "score": round((1 - distance) * 100, 1),
-            })
+            results.append(
+                {
+                    "job_id": rid,
+                    "title": meta.get("title", ""),
+                    "company": meta.get("company", ""),
+                    "score": round((1 - distance) * 100, 1),
+                }
+            )
         return results[:n_results]
     except Exception as e:
         logger.warning("vector_store.get_similar_jobs failed for %s: %s", job_id, e)
@@ -113,6 +145,7 @@ def get_similar_jobs(job_id: str, n_results: int = 5) -> list[dict]:
 
 
 # ── Resume indexing ───────────────────────────────────────────────
+
 
 def index_resume(user_id: int, resume_text: str, name: str = "") -> None:
     """Upsert a user's resume text for similarity queries."""
@@ -139,11 +172,14 @@ def find_matching_jobs_for_resume(user_id: int, n_results: int = 10) -> list[dic
         resume_text = existing["documents"][0]
         return search_jobs(resume_text, n_results=n_results)
     except Exception as e:
-        logger.warning("vector_store.find_matching_jobs_for_resume failed for user %s: %s", user_id, e)
+        logger.warning(
+            "vector_store.find_matching_jobs_for_resume failed for user %s: %s", user_id, e
+        )
         return []
 
 
 # ── Stats ─────────────────────────────────────────────────────────
+
 
 def store_stats() -> dict:
     try:

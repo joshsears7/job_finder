@@ -15,7 +15,7 @@ _client = None
 _last_error: str = ""
 
 # Model constants — override via env vars to avoid touching code on model upgrades
-_HAIKU  = os.getenv("CLAUDE_MODEL_HAIKU",  "claude-haiku-4-5-20251001")
+_HAIKU = os.getenv("CLAUDE_MODEL_HAIKU", "claude-haiku-4-5")
 _SONNET = os.getenv("CLAUDE_MODEL_SONNET", "claude-sonnet-4-6")
 
 
@@ -26,9 +26,27 @@ def _sanitize(text: str, max_len: int = 4000) -> str:
         return ""
     # Remove markdown code fences and injection-style role overrides
     text = re.sub(r"```.*?```", "", text, flags=re.DOTALL)
-    text = re.sub(r"(?i)(ignore (all |previous |above )?(instructions?|rules?|prompts?)|"
-                  r"you are now|new instruction|system:|</?s>|</?human>)", "", text)
+    text = re.sub(
+        r"(?i)(ignore (all |previous |above )?(instructions?|rules?|prompts?)|"
+        r"you are now|new instruction|system:|</?s>|</?human>)",
+        "",
+        text,
+    )
     return text[:max_len]
+
+
+def _clean_json_text(text: str) -> str:
+    """Strip markdown code fences from a Claude JSON response.
+
+    lstrip/rstrip with a string arg takes a *character set*, not a prefix —
+    using lstrip('```json') would mangle any JSON key starting with those chars.
+    This regex approach is safe regardless of what the JSON contains.
+    """
+    if not text:
+        return ""
+    text = re.sub(r"^```(?:json)?\s*", "", text.strip(), flags=re.MULTILINE)
+    text = re.sub(r"```\s*$", "", text.strip(), flags=re.MULTILINE)
+    return text.strip()
 
 
 def _get_client():
@@ -39,6 +57,7 @@ def _get_client():
             return None
         try:
             import anthropic
+
             _client = anthropic.Anthropic(api_key=api_key)
         except ImportError:
             return None
@@ -54,8 +73,9 @@ def get_last_error() -> str:
     return _last_error
 
 
-def _call_claude(system: str, user: str, max_tokens: int = 2048, retries: int = 2,
-                 model: str = None) -> str | None:
+def _call_claude(
+    system: str, user: str, max_tokens: int = 2048, retries: int = 2, model: str = None
+) -> str | None:
     """
     Claude API call with retry logic and error capture.
     Retries up to `retries` times on transient errors (rate-limit, server error).
@@ -88,7 +108,7 @@ def _call_claude(system: str, user: str, max_tokens: int = 2048, retries: int = 
             if attempt < retries and any(
                 kw in err_str for kw in ("rate", "overloaded", "529", "500", "503", "timeout")
             ):
-                time.sleep(2 ** attempt)  # 1s, then 2s
+                time.sleep(2**attempt)  # 1s, then 2s
                 continue
             break
 
@@ -123,8 +143,7 @@ def _stream_claude(system: str, user: str, max_tokens: int = 2048, model: str = 
             system=[{"type": "text", "text": system, "cache_control": {"type": "ephemeral"}}],
             messages=[{"role": "user", "content": user}],
         ) as stream:
-            for text in stream.text_stream:
-                yield text
+            yield from stream.text_stream
     except Exception as e:
         err_str = str(e)
         if "401" in err_str or "auth" in err_str.lower():
@@ -139,10 +158,10 @@ def _stream_claude(system: str, user: str, max_tokens: int = 2048, model: str = 
 def stream_cover_letter_claude(profile: dict, job: dict):
     """Stream a Sonnet-quality cover letter. Pass to st.write_stream()."""
     resume_text = _sanitize(profile.get("raw_text", ""), 3000)
-    company     = _sanitize(job.get("company", "the company"), 100)
-    role        = _sanitize(job.get("title", "this position"), 100)
-    jd          = _sanitize(job.get("description", ""), 1500)
-    name        = _sanitize(profile.get("name", ""), 80)
+    company = _sanitize(job.get("company", "the company"), 100)
+    role = _sanitize(job.get("title", "this position"), 100)
+    jd = _sanitize(job.get("description", ""), 1500)
+    name = _sanitize(profile.get("name", ""), 80)
 
     system = (
         "You are an expert career coach and professional writer. "
@@ -152,7 +171,7 @@ def stream_cover_letter_claude(profile: dict, job: dict):
         "Format: 3 tight paragraphs, no headers, ready to copy-paste. "
         "Never use brackets or placeholders like [insert X]."
     )
-    user = f"""Write a cover letter for {name or 'the candidate'} applying for the {role} role at {company}.
+    user = f"""Write a cover letter for {name or "the candidate"} applying for the {role} role at {company}.
 
 RESUME:
 {resume_text}
@@ -172,7 +191,7 @@ Requirements:
 def stream_about_claude(profile: dict, target_role: str = ""):
     """Stream a LinkedIn About section. Pass to st.write_stream()."""
     resume_text = _sanitize(profile.get("raw_text", ""), 3000)
-    name        = _sanitize(profile.get("name", ""), 80)
+    name = _sanitize(profile.get("name", ""), 80)
     target_role = _sanitize(target_role, 100)
 
     system = (
@@ -181,7 +200,7 @@ def stream_about_claude(profile: dict, target_role: str = ""):
         "Structure: Hook → What I bring (3 bullets) → Proof (specific accomplishment) → CTA. "
         "180-220 words. First person. No buzzwords."
     )
-    user = f"""Write a LinkedIn About section for {name or 'this person'}{f' targeting {target_role} roles' if target_role else ''}.
+    user = f"""Write a LinkedIn About section for {name or "this person"}{f" targeting {target_role} roles" if target_role else ""}.
 
 RESUME:
 {resume_text}
@@ -197,12 +216,14 @@ Instructions:
     return _stream_claude(system, user, max_tokens=400, model=_SONNET)
 
 
-def stream_coach_interview_claude(question: str, rough_answer: str, resume_text: str, job_title: str = ""):
+def stream_coach_interview_claude(
+    question: str, rough_answer: str, resume_text: str, job_title: str = ""
+):
     """Stream a polished STAR interview answer. Pass to st.write_stream()."""
-    question     = _sanitize(question, 500)
+    question = _sanitize(question, 500)
     rough_answer = _sanitize(rough_answer, 1000)
-    resume_text  = _sanitize(resume_text, 2000)
-    job_title    = _sanitize(job_title, 100)
+    resume_text = _sanitize(resume_text, 2000)
+    job_title = _sanitize(job_title, 100)
     system = (
         "You are an interview coach. Rewrite rough answers into polished STAR-format responses "
         "that are specific, confident, and draw on the candidate's actual experience. "
@@ -216,7 +237,7 @@ ROUGH ANSWER: {rough_answer}
 
 CANDIDATE RESUME (pull real details from here):
 {resume_text}
-{f'TARGET ROLE: {job_title}' if job_title else ''}
+{f"TARGET ROLE: {job_title}" if job_title else ""}
 
 Instructions:
 - Pull specific details, numbers, and achievements from the resume
@@ -242,11 +263,11 @@ def stream_thankyou_claude(
 ):
     """Stream a personalized post-interview thank-you note. Pass to st.write_stream()."""
     interviewer = _sanitize(interviewer_name, 80)
-    role        = _sanitize(role, 100)
-    company     = _sanitize(company, 100)
-    topics      = _sanitize(topics_discussed, 800)
-    name        = _sanitize(candidate_name, 80)
-    resume_ctx  = _sanitize(resume_text, 1000)
+    role = _sanitize(role, 100)
+    company = _sanitize(company, 100)
+    topics = _sanitize(topics_discussed, 800)
+    name = _sanitize(candidate_name, 80)
+    resume_ctx = _sanitize(resume_text, 1000)
 
     system = (
         "You are an expert career coach. Write a concise, genuine post-interview thank-you note. "
@@ -254,7 +275,7 @@ def stream_thankyou_claude(
         "Tone: warm, professional, confident. Under 180 words. Ready to send as-is."
     )
     first = interviewer.split()[0] if interviewer and interviewer.strip() else "there"
-    user = f"""Write a thank-you note for {name or 'the candidate'} to send after interviewing for the {role} role at {company} with {first}.
+    user = f"""Write a thank-you note for {name or "the candidate"} to send after interviewing for the {role} role at {company} with {first}.
 
 Topics they discussed:
 {topics}
@@ -276,10 +297,10 @@ Requirements:
 def generate_cover_letter_claude(profile: dict, job: dict) -> str | None:
     """Generate a personalized cover letter using Claude."""
     resume_text = _sanitize(profile.get("raw_text", ""), 3000)
-    company     = _sanitize(job.get("company", "the company"), 100)
-    role        = _sanitize(job.get("title", "this position"), 100)
-    jd          = _sanitize(job.get("description", ""), 1500)
-    name        = _sanitize(profile.get("name", ""), 80)
+    company = _sanitize(job.get("company", "the company"), 100)
+    role = _sanitize(job.get("title", "this position"), 100)
+    jd = _sanitize(job.get("description", ""), 1500)
+    name = _sanitize(profile.get("name", ""), 80)
 
     system = (
         "You are an expert career coach and professional writer. "
@@ -289,7 +310,7 @@ def generate_cover_letter_claude(profile: dict, job: dict) -> str | None:
         "Format: 3 tight paragraphs, no headers, ready to copy-paste. "
         "Never use brackets or placeholders like [insert X]."
     )
-    user = f"""Write a cover letter for {name or 'the candidate'} applying for the {role} role at {company}.
+    user = f"""Write a cover letter for {name or "the candidate"} applying for the {role} role at {company}.
 
 RESUME:
 {resume_text}
@@ -309,7 +330,7 @@ Requirements:
 def generate_about_claude(profile: dict, target_role: str = "") -> str | None:
     """Generate a LinkedIn About section using Claude."""
     resume_text = _sanitize(profile.get("raw_text", ""), 3000)
-    name        = _sanitize(profile.get("name", ""), 80)
+    name = _sanitize(profile.get("name", ""), 80)
     target_role = _sanitize(target_role, 100)
 
     system = (
@@ -318,7 +339,7 @@ def generate_about_claude(profile: dict, target_role: str = "") -> str | None:
         "Structure: Hook → What I bring (3 bullets) → Proof (specific accomplishment) → CTA. "
         "180-220 words. First person. No buzzwords."
     )
-    user = f"""Write a LinkedIn About section for {name or 'this person'}{f' targeting {target_role} roles' if target_role else ''}.
+    user = f"""Write a LinkedIn About section for {name or "this person"}{f" targeting {target_role} roles" if target_role else ""}.
 
 RESUME:
 {resume_text}
@@ -343,7 +364,7 @@ def generate_headlines_claude(profile: dict, target_role: str = "") -> list[str]
         "You are a LinkedIn optimization expert. Headlines must be specific, keyword-rich, "
         "and under 220 characters. Return exactly 3 options numbered 1. 2. 3. — no other text."
     )
-    user = f"""Write 3 LinkedIn headline variants for this person{f' targeting {target_role} roles' if target_role else ''}.
+    user = f"""Write 3 LinkedIn headline variants for this person{f" targeting {target_role} roles" if target_role else ""}.
 
 RESUME:
 {resume_text}
@@ -371,8 +392,8 @@ Requirements:
 
 def rewrite_bullet_claude(bullet: str, resume_text: str, job_description: str = "") -> str | None:
     """Rewrite a single resume bullet — stronger verb, better metric, more specific."""
-    bullet        = _sanitize(bullet, 500)
-    resume_text   = _sanitize(resume_text, 2000)
+    bullet = _sanitize(bullet, 500)
+    resume_text = _sanitize(resume_text, 2000)
     job_description = _sanitize(job_description, 600)
     jd_ctx = f"\n\nJob context:\n{job_description}" if job_description else ""
     system = (
@@ -395,6 +416,41 @@ Rules:
     return _call_claude(system, user, max_tokens=150)
 
 
+def generate_followup_claude(
+    title: str,
+    company: str,
+    date_applied: str,
+    candidate_name: str = "",
+    resume_text: str = "",
+) -> str | None:
+    """Generate a personalized follow-up email for an application."""
+    title = _sanitize(title, 100)
+    company = _sanitize(company, 100)
+    date_applied = _sanitize(date_applied, 20)
+    candidate_name = _sanitize(candidate_name, 80)
+    resume_snippet = _sanitize(resume_text, 800)
+    name_line = f"Candidate name: {candidate_name}" if candidate_name else ""
+    resume_line = f"\nResume context (for tone and skills):\n{resume_snippet}" if resume_snippet else ""
+    system = (
+        "You are a career coach writing a concise, genuine follow-up email. "
+        "No buzzwords, no flattery. Sound like a real professional, not a template."
+    )
+    user = f"""Write a follow-up email for this application:
+
+Role: {title}
+Company: {company}
+Date applied: {date_applied}
+{name_line}{resume_line}
+
+Rules:
+- 3 short paragraphs: restate interest + brief value prop, ask for status update, polite close
+- Specific to the role and company — not generic
+- Sign off with {candidate_name or '[Your Name]'}
+- No subject line, just the body
+- Under 150 words"""
+    return _call_claude(system, user, max_tokens=300)
+
+
 def generate_thankyou_claude(
     interviewer_name: str,
     role: str,
@@ -405,11 +461,11 @@ def generate_thankyou_claude(
 ) -> str | None:
     """Generate a specific, personalized thank-you note after an interview."""
     interviewer = _sanitize(interviewer_name, 80)
-    role        = _sanitize(role, 100)
-    company     = _sanitize(company, 100)
-    topics      = _sanitize(topics_discussed, 800)
-    name        = _sanitize(candidate_name, 80)
-    resume_ctx  = _sanitize(resume_text, 1000)
+    role = _sanitize(role, 100)
+    company = _sanitize(company, 100)
+    topics = _sanitize(topics_discussed, 800)
+    name = _sanitize(candidate_name, 80)
+    resume_ctx = _sanitize(resume_text, 1000)
 
     system = (
         "You are an expert career coach. Write a concise, genuine post-interview thank-you note. "
@@ -417,7 +473,7 @@ def generate_thankyou_claude(
         "Tone: warm, professional, confident. Under 180 words. Ready to send as-is."
     )
     first = interviewer.split()[0] if interviewer and interviewer.strip() else "there"
-    user = f"""Write a thank-you note for {name or 'the candidate'} to send after interviewing for the {role} role at {company} with {first}.
+    user = f"""Write a thank-you note for {name or "the candidate"} to send after interviewing for the {role} role at {company} with {first}.
 
 Topics they discussed:
 {topics}
@@ -442,7 +498,8 @@ def tailor_resume_claude(resume_text: str, job_description: str) -> list[dict] |
     Returns list of {original, rewritten, keyword} dicts.
     """
     import json
-    resume_text     = _sanitize(resume_text, 3000)
+
+    resume_text = _sanitize(resume_text, 3000)
     job_description = _sanitize(job_description, 1500)
     system = (
         "You are a resume coach. Identify the most relevant bullets and rewrite them "
@@ -469,8 +526,7 @@ Return ONLY the JSON array, nothing else. Example:
     if not result:
         return None
     try:
-        cleaned = result.strip().lstrip("```json").lstrip("```").rstrip("```").strip()
-        return json.loads(cleaned)
+        return json.loads(_clean_json_text(result))
     except Exception:
         return None
 
@@ -481,7 +537,8 @@ def decode_jd_claude(resume_text: str, job_description: str) -> dict | None:
     Returns dict with keys: what_they_want, stand_out, gaps, questions.
     """
     import json
-    resume_text     = _sanitize(resume_text, 2500)
+
+    resume_text = _sanitize(resume_text, 2500)
     job_description = _sanitize(job_description, 1500)
     system = (
         "You are a senior recruiter and career strategist. Analyze job descriptions with brutal honesty. "
@@ -507,18 +564,19 @@ Return ONLY valid JSON, nothing else."""
     if not result:
         return None
     try:
-        cleaned = result.strip().lstrip("```json").lstrip("```").rstrip("```").strip()
-        return json.loads(cleaned)
+        return json.loads(_clean_json_text(result))
     except Exception:
         return None
 
 
-def coach_interview_answer_claude(question: str, rough_answer: str, resume_text: str, job_title: str = "") -> str | None:
+def coach_interview_answer_claude(
+    question: str, rough_answer: str, resume_text: str, job_title: str = ""
+) -> str | None:
     """Rewrite a rough interview answer into a polished STAR-format response using real resume details."""
-    question     = _sanitize(question, 500)
+    question = _sanitize(question, 500)
     rough_answer = _sanitize(rough_answer, 1000)
-    resume_text  = _sanitize(resume_text, 2000)
-    job_title    = _sanitize(job_title, 100)
+    resume_text = _sanitize(resume_text, 2000)
+    job_title = _sanitize(job_title, 100)
     system = (
         "You are an interview coach. Rewrite rough answers into polished STAR-format responses "
         "that are specific, confident, and draw on the candidate's actual experience. "
@@ -532,7 +590,7 @@ ROUGH ANSWER: {rough_answer}
 
 CANDIDATE RESUME (pull real details from here):
 {resume_text}
-{f'TARGET ROLE: {job_title}' if job_title else ''}
+{f"TARGET ROLE: {job_title}" if job_title else ""}
 
 Instructions:
 - Pull specific details, numbers, and achievements from the resume
@@ -543,16 +601,19 @@ Instructions:
     return _call_claude(system, user, max_tokens=400)
 
 
-def explain_skill_gaps_claude(missing_skills: list[str], resume_text: str, job_description: str) -> list[dict] | None:
+def explain_skill_gaps_claude(
+    missing_skills: list[str], resume_text: str, job_description: str
+) -> list[dict] | None:
     """
     For each missing skill, explain why it matters and how to address it fast.
     Returns list of {skill, why, how} dicts.
     """
     import json
+
     if not missing_skills:
         return None
-    skills_str      = _sanitize(", ".join(missing_skills[:6]), 300)
-    resume_text     = _sanitize(resume_text, 1500)
+    skills_str = _sanitize(", ".join(missing_skills[:6]), 300)
+    resume_text = _sanitize(resume_text, 1500)
     job_description = _sanitize(job_description, 1000)
     system = (
         "You are a career advisor. For each missing skill give a brief, specific explanation "
@@ -580,8 +641,7 @@ Return ONLY valid JSON array, nothing else."""
     if not result:
         return None
     try:
-        cleaned = result.strip().lstrip("```json").lstrip("```").rstrip("```").strip()
-        return json.loads(cleaned)
+        return json.loads(_clean_json_text(result))
     except Exception:
         return None
 
@@ -594,21 +654,21 @@ def generate_cold_dm_claude(
     job_title: str = "",
 ) -> str | None:
     """Generate a personalized cold LinkedIn DM using Claude."""
-    name              = _sanitize(profile.get("name", ""), 80)
-    resume_text       = _sanitize(profile.get("raw_text", ""), 1500)
-    target_name       = _sanitize(target_name, 80)
-    target_company    = _sanitize(target_company, 100)
+    name = _sanitize(profile.get("name", ""), 80)
+    resume_text = _sanitize(profile.get("raw_text", ""), 1500)
+    target_name = _sanitize(target_name, 80)
+    target_company = _sanitize(target_company, 100)
     target_role_at_co = _sanitize(target_role_at_co, 100)
-    job_title         = _sanitize(job_title, 100)
-    titles  = profile.get("titles", [])
+    job_title = _sanitize(job_title, 100)
+    titles = profile.get("titles", [])
     my_role = titles[0].title() if titles else "professional"
-    first   = target_name.split()[0] if target_name and target_name.strip() else "there"
+    first = target_name.split()[0] if target_name and target_name.strip() else "there"
 
     system = (
         "You are a networking expert. Write cold LinkedIn DMs that feel genuine and specific, "
         "not templated or spammy. Under 150 words. Mobile-readable. No buzzwords."
     )
-    user = f"""Write a cold LinkedIn DM from {name or 'the candidate'} ({my_role}) to {first} at {target_company}{f' regarding the {job_title} role' if job_title else ''}.
+    user = f"""Write a cold LinkedIn DM from {name or "the candidate"} ({my_role}) to {first} at {target_company}{f" regarding the {job_title} role" if job_title else ""}.
 
 SENDER'S BACKGROUND (resume excerpt):
 {resume_text}
@@ -624,16 +684,19 @@ Instructions:
     return _call_claude(system, user, max_tokens=400)
 
 
-def mock_interview_feedback_claude(question: str, answer: str, resume_text: str, job_title: str = "") -> dict | None:
+def mock_interview_feedback_claude(
+    question: str, answer: str, resume_text: str, job_title: str = ""
+) -> dict | None:
     """
     Give detailed AI feedback on an interview answer.
     Returns dict: {score, verdict, strengths, improvements, example_line}.
     """
     import json
-    question    = _sanitize(question, 500)
-    answer      = _sanitize(answer, 1500)
+
+    question = _sanitize(question, 500)
+    answer = _sanitize(answer, 1500)
     resume_text = _sanitize(resume_text, 2000)
-    job_title   = _sanitize(job_title, 100)
+    job_title = _sanitize(job_title, 100)
     system = (
         "You are a senior hiring manager and interview coach. Give honest, specific, actionable feedback on interview answers. "
         "Return valid JSON only — no markdown, no explanation."
@@ -646,7 +709,7 @@ CANDIDATE'S ANSWER: {answer}
 
 CANDIDATE BACKGROUND (resume):
 {resume_text}
-{f'TARGET ROLE: {job_title}' if job_title else ''}
+{f"TARGET ROLE: {job_title}" if job_title else ""}
 
 Return JSON with exactly these keys:
 - "score": integer 0-100
@@ -661,8 +724,7 @@ Return ONLY valid JSON."""
     if not result:
         return None
     try:
-        cleaned = result.strip().lstrip("```json").lstrip("```").rstrip("```").strip()
-        return json.loads(cleaned)
+        return json.loads(_clean_json_text(result))
     except Exception:
         return None
 
@@ -673,9 +735,9 @@ def assess_fit_claude(profile: dict, job: dict) -> str | None:
     Returns 2-3 paragraphs of direct, useful analysis.
     """
     resume_text = _sanitize(profile.get("raw_text", ""), 2500)
-    company     = _sanitize(job.get("company", "the company"), 100)
-    role        = _sanitize(job.get("title", "this role"), 100)
-    jd          = _sanitize(job.get("description", ""), 1500)
+    company = _sanitize(job.get("company", "the company"), 100)
+    role = _sanitize(job.get("title", "this role"), 100)
+    jd = _sanitize(job.get("description", ""), 1500)
 
     system = (
         "You are a brutally honest career advisor. Assess fit between a candidate and a job. "
@@ -706,16 +768,17 @@ def company_intel_claude(company: str, job_description: str, role: str = "") -> 
     Returns dict: {culture_signals, day_in_life, red_flags, likely_questions}.
     """
     import json
+
     if not job_description.strip():
         return None
-    company         = _sanitize(company, 100)
-    role            = _sanitize(role, 100)
+    company = _sanitize(company, 100)
+    role = _sanitize(role, 100)
     job_description = _sanitize(job_description, 2000)
     system = (
         "You are an experienced recruiter and career strategist who reads between the lines of job descriptions. "
         "Decode what the company is really like from how they write. Return valid JSON only."
     )
-    user = f"""Analyze this job description for {role or 'the role'} at {company} and decode what it really tells us.
+    user = f"""Analyze this job description for {role or "the role"} at {company} and decode what it really tells us.
 
 JOB DESCRIPTION:
 {job_description}
@@ -732,8 +795,7 @@ Return ONLY valid JSON."""
     if not result:
         return None
     try:
-        cleaned = result.strip().lstrip("```json").lstrip("```").rstrip("```").strip()
-        return json.loads(cleaned)
+        return json.loads(_clean_json_text(result))
     except Exception:
         return None
 
@@ -745,15 +807,16 @@ def compare_offers_claude(offers: list[dict], profile: dict) -> dict | None:
     Returns dict: {recommendation, breakdown, negotiation_tips}.
     """
     import json
+
     if not offers:
         return None
     resume_text = _sanitize(profile.get("raw_text", ""), 1500)
     offers_text = "\n\n".join(
-        f"OFFER {i+1} — {_sanitize(o.get('company','?'),80)} ({_sanitize(o.get('role','?'),80)}):\n"
-        f"  Salary: {_sanitize(o.get('salary','?'),50)}\n"
-        f"  Equity/Bonus: {_sanitize(o.get('equity','not specified'),100)}\n"
-        f"  Benefits: {_sanitize(o.get('benefits','not specified'),200)}\n"
-        f"  Notes: {_sanitize(o.get('notes',''),200)}"
+        f"OFFER {i + 1} — {_sanitize(o.get('company', '?'), 80)} ({_sanitize(o.get('role', '?'), 80)}):\n"
+        f"  Salary: {_sanitize(o.get('salary', '?'), 50)}\n"
+        f"  Equity/Bonus: {_sanitize(o.get('equity', 'not specified'), 100)}\n"
+        f"  Benefits: {_sanitize(o.get('benefits', 'not specified'), 200)}\n"
+        f"  Notes: {_sanitize(o.get('notes', ''), 200)}"
         for i, o in enumerate(offers)
     )
     system = (
@@ -782,8 +845,7 @@ Return ONLY valid JSON."""
     if not result:
         return None
     try:
-        cleaned = result.strip().lstrip("```json").lstrip("```").rstrip("```").strip()
-        return json.loads(cleaned)
+        return json.loads(_clean_json_text(result))
     except Exception:
         return None
 
@@ -795,7 +857,7 @@ def job_search_strategy_claude(profile: dict, applications: list[dict]) -> str |
     Returns narrative strategy advice (3-4 paragraphs).
     """
     resume_text = _sanitize(profile.get("raw_text", ""), 2500)
-    name        = _sanitize(profile.get("name", ""), 80)
+    name = _sanitize(profile.get("name", ""), 80)
 
     app_summary = ""
     if applications:
@@ -818,7 +880,7 @@ def job_search_strategy_claude(profile: dict, applications: list[dict]) -> str |
         "No generic tips — everything must be specific to this person's resume and situation. "
         "Be honest about what's working and what isn't."
     )
-    user = f"""Give {name or 'this candidate'} a specific job search strategy based on their resume and application history.
+    user = f"""Give {name or "this candidate"} a specific job search strategy based on their resume and application history.
 
 RESUME:
 {resume_text}
@@ -834,7 +896,9 @@ Under 300 words. Be direct. No motivational fluff."""
 
     return _call_claude(system, user, max_tokens=700)
 
+
 # ── Career Intelligence (Sonnet-powered) ──────────────────────────────
+
 
 def _call_claude_sonnet(system: str, user: str, max_tokens: int = 1500):
     """Higher-quality Sonnet pathway for career intelligence features."""
@@ -842,13 +906,13 @@ def _call_claude_sonnet(system: str, user: str, max_tokens: int = 1500):
 
 
 def _parse_json_response(text) -> dict:
-    """Strip markdown fences and parse JSON from Claude response."""
-    import json, re
+    """Strip markdown fences and parse a JSON object from Claude response."""
+    import json
+
     if not text:
         return {}
-    text = re.sub(r"^```(?:json)?\s*", "", text.strip(), flags=re.MULTILINE)
-    text = re.sub(r"```\s*$", "", text.strip(), flags=re.MULTILINE)
-    m = re.search(r"\{.*\}", text, re.DOTALL)
+    cleaned = _clean_json_text(text)
+    m = re.search(r"\{.*\}", cleaned, re.DOTALL)
     if m:
         try:
             return json.loads(m.group())
@@ -859,9 +923,9 @@ def _parse_json_response(text) -> dict:
 
 def executive_narrative_claude(profile: dict, career_level_data: dict) -> dict:
     """Analyse career narrative arc and executive positioning."""
-    level  = _sanitize(str(career_level_data.get("level", "mid")), 20)
+    level = _sanitize(str(career_level_data.get("level", "mid")), 20)
     resume = _sanitize(profile.get("raw_text", ""), 3000)
-    name   = _sanitize(profile.get("name", "this candidate"), 80)
+    name = _sanitize(profile.get("name", "this candidate"), 80)
 
     system = (
         "You are a senior executive career coach. "
@@ -892,8 +956,8 @@ Return ONLY a JSON object:
 
 def compensation_intel_claude(profile: dict, career_level_data: dict) -> dict:
     """Generate compensation intelligence and negotiation strategy."""
-    level  = _sanitize(str(career_level_data.get("level", "mid")), 20)
-    years  = int(career_level_data.get("years", 0))
+    level = _sanitize(str(career_level_data.get("level", "mid")), 20)
+    years = int(career_level_data.get("years") or 0)
     skills = profile.get("skills", [])[:10]
     resume = _sanitize(profile.get("raw_text", ""), 2000)
 
@@ -906,7 +970,7 @@ def compensation_intel_claude(profile: dict, career_level_data: dict) -> dict:
 
 Career Level: {level}
 Years Experience: {years}
-Key Skills: {', '.join(skills)}
+Key Skills: {", ".join(skills)}
 Resume excerpt:
 {resume}
 
@@ -929,9 +993,9 @@ Use 2024-2025 US market data. Be specific with numbers."""
 
 def brand_differentiation_claude(profile: dict, career_level_data: dict) -> dict:
     """Identify brand differentiation and unique value proposition."""
-    level  = _sanitize(str(career_level_data.get("level", "mid")), 20)
+    level = _sanitize(str(career_level_data.get("level", "mid")), 20)
     resume = _sanitize(profile.get("raw_text", ""), 3000)
-    name   = _sanitize(profile.get("name", "this candidate"), 80)
+    name = _sanitize(profile.get("name", "this candidate"), 80)
 
     system = (
         "You are a personal branding expert for professionals at all career levels. "

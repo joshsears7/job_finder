@@ -1,9 +1,10 @@
 """
 Shared fixtures for CareerIQ test suite.
 """
+
 import os
 import sys
-import sqlite3
+
 import pytest
 
 # Make project root importable without installation
@@ -62,20 +63,21 @@ Emergency triage and team collaboration required.
 """
 
 SAMPLE_JOB = {
-    "id":          "test-job-001",
-    "title":       "Business Analyst",
-    "company":     "FinanceCo",
-    "location":    "Charlotte, NC",
-    "url":         "https://example.com/job/001",
-    "source":      "test",
+    "id": "test-job-001",
+    "title": "Business Analyst",
+    "company": "FinanceCo",
+    "location": "Charlotte, NC",
+    "url": "https://example.com/job/001",
+    "source": "test",
     "description": SAMPLE_JD_ANALYST,
-    "salary_min":  70_000,
-    "salary_max":  95_000,
-    "date":        "2026-04-20",
+    "salary_min": 70_000,
+    "salary_max": 95_000,
+    "date": "2026-04-20",
 }
 
 
 # ── Tracker DB fixture ────────────────────────────────────────────────────────
+
 
 @pytest.fixture
 def tmp_db(tmp_path, monkeypatch):
@@ -83,8 +85,8 @@ def tmp_db(tmp_path, monkeypatch):
     Redirect tracker to a fresh temp SQLite DB for each test.
     Returns the db path (rarely needed directly).
     """
+
     import tracker as tr
-    from pathlib import Path
 
     db_path = tmp_path / "test_applications.db"
     monkeypatch.setattr(tr, "_SQLITE_PATH", db_path)

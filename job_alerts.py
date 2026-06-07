@@ -11,50 +11,60 @@ Manual run:
     python job_alerts.py
 """
 
+import html as _html
 import json
 import os
 import smtplib
-import requests
 from datetime import datetime
-from email.mime.text import MIMEText
 from email.mime.multipart import MIMEMultipart
+from email.mime.text import MIMEText
+
+import requests
 
 CONFIG_FILE = os.path.join(os.path.dirname(os.path.abspath(__file__)), "job_alerts_config.json")
 
 
 # ── Config helpers ────────────────────────────────────────────────
 
+
 def load_config() -> dict:
     if os.path.exists(CONFIG_FILE):
-        with open(CONFIG_FILE) as f:
-            return json.load(f)
+        try:
+            with open(CONFIG_FILE) as f:
+                return json.load(f)
+        except (json.JSONDecodeError, OSError):
+            pass
     return {
-        "alerts":      [],
-        "ntfy_topic":  "",
+        "alerts": [],
+        "ntfy_topic": "",
         "resume_text": "",
-        "seen_ids":    [],
-        "last_run":    None,
+        "seen_ids": [],
+        "last_run": None,
     }
 
 
 def save_config(config: dict):
-    with open(CONFIG_FILE, "w") as f:
+    tmp = CONFIG_FILE + ".tmp"
+    with open(tmp, "w") as f:
         json.dump(config, f, indent=2)
+    os.replace(tmp, CONFIG_FILE)
 
 
 def add_alert(role: str, cities: list, min_score: int = 60):
     config = load_config()
     # Remove duplicate
-    config["alerts"] = [a for a in config["alerts"]
-                        if not (a["role"] == role and a["cities"] == cities)]
+    config["alerts"] = [
+        a for a in config["alerts"] if not (a["role"] == role and a["cities"] == cities)
+    ]
     config["alerts"].append({"role": role, "cities": cities, "min_score": min_score})
     save_config(config)
 
 
 def remove_alert(role: str, cities: list):
     config = load_config()
-    config["alerts"] = [a for a in config["alerts"]
-                        if not (a["role"] == role and a["cities"] == cities)]
+    config["alerts"] = [
+        a for a in config["alerts"] if not (a["role"] == role and a["cities"] == cities)
+    ]
     save_config(config)
 
 
@@ -78,6 +88,7 @@ def set_alert_email(email: str):
 
 # ── Email sender (SendGrid SMTP or any SMTP provider) ─────────────
 
+
 def send_email(to_addr: str, subject: str, body_html: str) -> bool:
     api_key = os.getenv("SENDGRID_API_KEY", "")
     if not api_key or not to_addr:
@@ -85,8 +96,8 @@ def send_email(to_addr: str, subject: str, body_html: str) -> bool:
     try:
         msg = MIMEMultipart("alternative")
         msg["Subject"] = subject
-        msg["From"]    = "CareerIQ Alerts <alerts@careerriq.app>"
-        msg["To"]      = to_addr
+        msg["From"] = "CareerIQ Alerts <alerts@careerriq.app>"
+        msg["To"] = to_addr
         msg.attach(MIMEText(body_html, "html"))
 
         with smtplib.SMTP("smtp.sendgrid.net", 587, timeout=10) as server:
@@ -108,14 +119,15 @@ def test_email(to_addr: str) -> bool:
 
 # ── ntfy sender ───────────────────────────────────────────────────
 
+
 def send_ntfy(topic: str, title: str, body: str, url: str = "") -> bool:
     if not topic:
         return False
     try:
         headers = {
-            "Title":    title,
+            "Title": title,
             "Priority": "default",
-            "Tags":     "briefcase",
+            "Tags": "briefcase",
         }
         if url:
             headers["Click"] = url
@@ -141,6 +153,7 @@ def test_ntfy(topic: str) -> bool:
 
 # ── Main runner ───────────────────────────────────────────────────
 
+
 def run_alerts() -> dict:
     """
     Fetch jobs for each saved alert, score them, and push
@@ -151,23 +164,23 @@ def run_alerts() -> dict:
     from scorer import score_job
 
     config = load_config()
-    topic       = config.get("ntfy_topic", "")
+    topic = config.get("ntfy_topic", "")
     alert_email = config.get("alert_email", "") or os.getenv("ALERT_EMAIL", "")
     resume_text = config.get("resume_text", "")
-    alerts      = config.get("alerts", [])
-    seen_ids    = set(config.get("seen_ids", []))
+    alerts = config.get("alerts", [])
+    seen_ids = set(config.get("seen_ids", []))
 
     if not alerts:
         return {"sent": 0, "checked": 0, "error": "No alerts configured."}
     if not topic:
         return {"sent": 0, "checked": 0, "error": "No ntfy topic set."}
 
-    sent    = 0
+    sent = 0
     checked = 0
 
     for alert in alerts:
-        role      = alert.get("role", "")
-        cities    = alert.get("cities", [])
+        role = alert.get("role", "")
+        cities = alert.get("cities", [])
         min_score = alert.get("min_score", 60)
         if not role or not cities:
             continue
@@ -188,30 +201,42 @@ def run_alerts() -> dict:
                 body = (
                     f"{j['company']} · {j['location']}\n"
                     f"📊 Fit: {score}%  ·  {j['source']}{sal}\n"
-                    f"{j.get('description','')[:120]}…"
+                    f"{j.get('description', '')[:120]}…"
                 )
                 notified = False
                 if topic:
-                    notified = send_ntfy(topic, f"New: {j['title']} @ {j['company']}", body, j.get("url",""))
-                if alert_email:
-                    job_url = j.get("url", "")
-                    html = (
-                        f"<h2 style='color:#2563eb'>{j['title']} @ {j['company']}</h2>"
-                        f"<p><b>Location:</b> {j['location']} &nbsp;|&nbsp; "
-                        f"<b>Fit Score:</b> {score}% &nbsp;|&nbsp; "
-                        f"<b>Source:</b> {j['source']}</p>"
-                        + (f"<p><b>Salary:</b> ${int(j['salary_min']):,}–${int(j['salary_max']):,}</p>" if j.get("salary_min") and j.get("salary_max") else "")
-                        + f"<p>{j.get('description','')[:300]}…</p>"
-                        + (f"<p><a href='{job_url}'>View Job →</a></p>" if job_url else "")
+                    notified = send_ntfy(
+                        topic, f"New: {j['title']} @ {j['company']}", body, j.get("url", "")
                     )
-                    email_ok = send_email(alert_email, f"CareerIQ: {j['title']} @ {j['company']} ({score}% match)", html)
+                if alert_email:
+                    _raw_url = j.get("url", "")
+                    job_url = _raw_url if str(_raw_url).startswith(("https://", "http://")) else ""
+                    _e = _html.escape
+                    email_html = (
+                        f"<h2 style='color:#2563eb'>{_e(j['title'])} @ {_e(j['company'])}</h2>"
+                        f"<p><b>Location:</b> {_e(j['location'])} &nbsp;|&nbsp; "
+                        f"<b>Fit Score:</b> {score}% &nbsp;|&nbsp; "
+                        f"<b>Source:</b> {_e(j['source'])}</p>"
+                        + (
+                            f"<p><b>Salary:</b> ${int(j['salary_min']):,}–${int(j['salary_max']):,}</p>"
+                            if j.get("salary_min") and j.get("salary_max")
+                            else ""
+                        )
+                        + f"<p>{_e(j.get('description', '')[:300])}…</p>"
+                        + (f"<p><a href='{_e(job_url, quote=True)}'>View Job →</a></p>" if job_url else "")
+                    )
+                    email_ok = send_email(
+                        alert_email,
+                        f"CareerIQ: {_e(j['title'])} @ {_e(j['company'])} ({score}% match)",
+                        email_html,
+                    )
                     notified = notified or email_ok
                 if notified:
                     sent += 1
 
     # Persist seen IDs (keep last 3000)
-    config["seen_ids"]  = list(seen_ids)[-3000:]
-    config["last_run"]  = datetime.now().isoformat()
+    config["seen_ids"] = list(seen_ids)[-3000:]
+    config["last_run"] = datetime.now().isoformat()
     save_config(config)
 
     return {"sent": sent, "checked": checked, "error": None}

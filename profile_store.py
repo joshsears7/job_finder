@@ -8,7 +8,6 @@ All JSON list fields stored as JSON strings.
 
 import json
 import logging
-import os
 import threading
 from datetime import datetime
 from pathlib import Path
@@ -50,10 +49,10 @@ _DEFAULT_PROFILE = {
     "majors": "",
     "years_experience": 0,
     # Scanner config
-    "auto_save_threshold": 60,   # auto-save jobs scoring >= this
-    "scan_interval_hours": 4,    # how often background scanner runs
-    "notify_on_fresh": True,     # macOS push on new high-score job
-    "fresh_threshold": 72,       # score to trigger immediate notification
+    "auto_save_threshold": 60,  # auto-save jobs scoring >= this
+    "scan_interval_hours": 4,  # how often background scanner runs
+    "notify_on_fresh": True,  # macOS push on new high-score job
+    "fresh_threshold": 72,  # score to trigger immediate notification
     # Stored resume text (populated when user uploads resume in app)
     "resume_text": "",
 }
@@ -64,8 +63,11 @@ def _connect():
 
 
 _JSON_FIELDS = {
-    "target_roles", "target_cities", "target_countries",
-    "target_companies", "blacklist_companies",
+    "target_roles",
+    "target_cities",
+    "target_countries",
+    "target_companies",
+    "blacklist_companies",
 }
 
 
@@ -101,7 +103,9 @@ _PROFILE_COLS = frozenset(_DEFAULT_PROFILE.keys()) | {"updated_at"}
 def init_profiles():
     with _db_lock:
         conn = _connect()
-        _db.create_table(conn, """
+        _db.create_table(
+            conn,
+            """
             CREATE TABLE IF NOT EXISTS user_profiles (
                 id                   INTEGER PRIMARY KEY AUTOINCREMENT,
                 user_id              INTEGER UNIQUE DEFAULT 1,
@@ -117,10 +121,10 @@ def init_profiles():
                 target_countries     TEXT DEFAULT '[]',
                 min_salary           REAL DEFAULT 0,
                 max_salary           REAL DEFAULT 0,
-                salary_type          TEXT DEFAULT 'hourly',
+                salary_type          TEXT DEFAULT 'annual',
                 open_to_remote       INTEGER DEFAULT 1,
                 open_to_relocate     INTEGER DEFAULT 1,
-                job_type             TEXT DEFAULT 'internship',
+                job_type             TEXT DEFAULT 'full-time',
                 target_companies     TEXT DEFAULT '[]',
                 blacklist_companies  TEXT DEFAULT '[]',
                 work_auth            TEXT DEFAULT '',
@@ -137,9 +141,10 @@ def init_profiles():
                 star_stories         TEXT DEFAULT '[]',
                 updated_at           TEXT DEFAULT ''
             )
-        """)
+        """,
+        )
         # Seed default profile for user_id=1 if none exists
-        existing = conn.execute(f"SELECT id FROM user_profiles WHERE user_id=1").fetchone()
+        existing = conn.execute("SELECT id FROM user_profiles WHERE user_id=1").fetchone()
         if not existing:
             seed = _serialize(_DEFAULT_PROFILE)
             seed["updated_at"] = datetime.now().isoformat()
@@ -152,8 +157,8 @@ def init_profiles():
             )
         # Schema migrations
         for col, definition in [
-            ("portfolio_url",  "TEXT DEFAULT ''"),
-            ("star_stories",   "TEXT DEFAULT '[]'"),
+            ("portfolio_url", "TEXT DEFAULT ''"),
+            ("star_stories", "TEXT DEFAULT '[]'"),
         ]:
             _db.add_column_if_missing(conn, "user_profiles", col, definition)
         conn.commit()
@@ -163,18 +168,14 @@ def init_profiles():
 def get_all_profiles() -> list[tuple[int, str]]:
     """Return [(user_id, name), ...] for all users — used by the profile switcher."""
     conn = _connect()
-    rows = conn.execute(
-        "SELECT user_id, name FROM user_profiles ORDER BY user_id"
-    ).fetchall()
+    rows = conn.execute("SELECT user_id, name FROM user_profiles ORDER BY user_id").fetchall()
     conn.close()
     return [(r["user_id"], r["name"]) for r in rows]
 
 
 def get_profile(user_id: int = 1) -> dict:
     conn = _connect()
-    row = conn.execute(
-        f"SELECT * FROM user_profiles WHERE user_id={_db.P}", (user_id,)
-    ).fetchone()
+    row = conn.execute(f"SELECT * FROM user_profiles WHERE user_id={_db.P}", (user_id,)).fetchone()
     conn.close()
     if row:
         return _deserialize(dict(row))
@@ -255,4 +256,3 @@ def set_star_stories(stories: list, user_id: int = 1) -> bool:
 
 
 init_profiles()
-

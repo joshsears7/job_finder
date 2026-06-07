@@ -10,9 +10,9 @@ Run: python mcp_server.py
 Requires: pip install mcp (anthropic's MCP SDK)
 """
 
-import sys
 import json
 import logging
+import sys
 from typing import Any
 
 logging.basicConfig(level=logging.INFO, stream=sys.stderr)
@@ -21,9 +21,9 @@ _log = logging.getLogger("careeriq-mcp")
 
 def _run_server():
     try:
+        from mcp import types
         from mcp.server import Server
         from mcp.server.stdio import stdio_server
-        from mcp import types
     except ImportError:
         print(
             "MCP SDK not installed. Run: pip install mcp",
@@ -48,9 +48,15 @@ def _run_server():
                 inputSchema={
                     "type": "object",
                     "properties": {
-                        "resume_text":     {"type": "string", "description": "Full resume text"},
-                        "job_description": {"type": "string", "description": "Full job description text"},
-                        "job_title":       {"type": "string", "description": "Job title (optional, improves accuracy)"},
+                        "resume_text": {"type": "string", "description": "Full resume text"},
+                        "job_description": {
+                            "type": "string",
+                            "description": "Full job description text",
+                        },
+                        "job_title": {
+                            "type": "string",
+                            "description": "Job title (optional, improves accuracy)",
+                        },
                     },
                     "required": ["resume_text", "job_description"],
                 },
@@ -64,11 +70,14 @@ def _run_server():
                 inputSchema={
                     "type": "object",
                     "properties": {
-                        "resume_text":     {"type": "string", "description": "Full resume text"},
-                        "job_title":       {"type": "string", "description": "Job title"},
-                        "company":         {"type": "string", "description": "Company name"},
-                        "job_description": {"type": "string", "description": "Job description (optional but recommended)"},
-                        "candidate_name":  {"type": "string", "description": "Candidate's name"},
+                        "resume_text": {"type": "string", "description": "Full resume text"},
+                        "job_title": {"type": "string", "description": "Job title"},
+                        "company": {"type": "string", "description": "Company name"},
+                        "job_description": {
+                            "type": "string",
+                            "description": "Job description (optional but recommended)",
+                        },
+                        "candidate_name": {"type": "string", "description": "Candidate's name"},
                     },
                     "required": ["resume_text", "job_title", "company"],
                 },
@@ -82,8 +91,11 @@ def _run_server():
                 inputSchema={
                     "type": "object",
                     "properties": {
-                        "resume_text":     {"type": "string", "description": "Full resume text"},
-                        "job_description": {"type": "string", "description": "Job description to scan against"},
+                        "resume_text": {"type": "string", "description": "Full resume text"},
+                        "job_description": {
+                            "type": "string",
+                            "description": "Job description to scan against",
+                        },
                     },
                     "required": ["resume_text", "job_description"],
                 },
@@ -98,10 +110,16 @@ def _run_server():
                 inputSchema={
                     "type": "object",
                     "properties": {
-                        "company":         {"type": "string", "description": "Company name"},
-                        "role":            {"type": "string", "description": "Role you're applying for"},
-                        "company_website": {"type": "string", "description": "Company website URL (optional, improves tech stack detection)"},
-                        "resume_text":     {"type": "string", "description": "Your resume text (optional, improves tailoring)"},
+                        "company": {"type": "string", "description": "Company name"},
+                        "role": {"type": "string", "description": "Role you're applying for"},
+                        "company_website": {
+                            "type": "string",
+                            "description": "Company website URL (optional, improves tech stack detection)",
+                        },
+                        "resume_text": {
+                            "type": "string",
+                            "description": "Your resume text (optional, improves tailoring)",
+                        },
                     },
                     "required": ["company"],
                 },
@@ -115,8 +133,11 @@ def _run_server():
                 inputSchema={
                     "type": "object",
                     "properties": {
-                        "resume_text":     {"type": "string", "description": "Full resume text"},
-                        "job_description": {"type": "string", "description": "Job description to compare against"},
+                        "resume_text": {"type": "string", "description": "Full resume text"},
+                        "job_description": {
+                            "type": "string",
+                            "description": "Job description to compare against",
+                        },
                     },
                     "required": ["resume_text", "job_description"],
                 },
@@ -130,9 +151,9 @@ def _run_server():
                 inputSchema={
                     "type": "object",
                     "properties": {
-                        "resume_text":  {"type": "string", "description": "Full resume text"},
-                        "target_role":  {"type": "string", "description": "Target role (optional)"},
-                        "name":         {"type": "string", "description": "Candidate name"},
+                        "resume_text": {"type": "string", "description": "Full resume text"},
+                        "target_role": {"type": "string", "description": "Target role (optional)"},
+                        "name": {"type": "string", "description": "Candidate name"},
                     },
                     "required": ["resume_text"],
                 },
@@ -146,14 +167,29 @@ def _run_server():
                 inputSchema={
                     "type": "object",
                     "properties": {
-                        "generated_text":  {"type": "string", "description": "The AI-generated text to evaluate"},
-                        "output_type":     {
+                        "generated_text": {
                             "type": "string",
-                            "enum": ["cover_letter", "linkedin_about", "interview_answer", "cold_dm", "other"],
+                            "description": "The AI-generated text to evaluate",
+                        },
+                        "output_type": {
+                            "type": "string",
+                            "enum": [
+                                "cover_letter",
+                                "linkedin_about",
+                                "interview_answer",
+                                "cold_dm",
+                                "other",
+                            ],
                             "description": "Type of output being evaluated",
                         },
-                        "resume_text":     {"type": "string", "description": "Source resume (for grounding check)"},
-                        "job_description": {"type": "string", "description": "Job description (for relevance/keyword check)"},
+                        "resume_text": {
+                            "type": "string",
+                            "description": "Source resume (for grounding check)",
+                        },
+                        "job_description": {
+                            "type": "string",
+                            "description": "Job description (for relevance/keyword check)",
+                        },
                     },
                     "required": ["generated_text", "output_type"],
                 },
@@ -173,20 +209,24 @@ def _run_server():
 
     async def _dispatch(name: str, args: dict) -> Any:
         if name == "score_resume_vs_job":
-            from scorer import score_job, get_skill_gaps
-            score   = score_job(args["resume_text"], args["job_description"], args.get("job_title", ""))
+            from scorer import get_skill_gaps, score_job
+
+            score = score_job(
+                args["resume_text"], args["job_description"], args.get("job_title", "")
+            )
             matched, missing = get_skill_gaps(args["resume_text"], args["job_description"])
             return {"score": score, "matched_skills": matched[:20], "missing_skills": missing[:10]}
 
         elif name == "generate_cover_letter":
             from claude_ai import generate_cover_letter_claude
+
             profile = {
                 "raw_text": args["resume_text"],
-                "name":     args.get("candidate_name", ""),
+                "name": args.get("candidate_name", ""),
             }
             job = {
-                "title":       args["job_title"],
-                "company":     args["company"],
+                "title": args["job_title"],
+                "company": args["company"],
                 "description": args.get("job_description", ""),
             }
             text = generate_cover_letter_claude(profile, job)
@@ -194,10 +234,12 @@ def _run_server():
 
         elif name == "ats_scan":
             from ai_tools import ats_scan
+
             return ats_scan(args["resume_text"], args["job_description"])
 
         elif name == "research_company":
             from company_research import research_company
+
             return research_company(
                 company=args["company"],
                 role=args.get("role", ""),
@@ -206,10 +248,14 @@ def _run_server():
             )
 
         elif name == "get_skill_gaps":
-            from scorer import get_skill_gaps
             from claude_ai import explain_skill_gaps_claude
+            from scorer import get_skill_gaps
+
             matched, missing = get_skill_gaps(args["resume_text"], args["job_description"])
-            explanations = explain_skill_gaps_claude(missing, args["resume_text"], args["job_description"]) or []
+            explanations = (
+                explain_skill_gaps_claude(missing, args["resume_text"], args["job_description"])
+                or []
+            )
             return {
                 "matched_skills": matched[:20],
                 "missing_skills": missing[:10],
@@ -218,15 +264,17 @@ def _run_server():
 
         elif name == "generate_linkedin_about":
             from claude_ai import generate_about_claude
+
             profile = {
                 "raw_text": args["resume_text"],
-                "name":     args.get("name", ""),
+                "name": args.get("name", ""),
             }
             text = generate_about_claude(profile, args.get("target_role", ""))
             return {"about_section": text or "Generation failed — check ANTHROPIC_API_KEY"}
 
         elif name == "score_output_quality":
             from eval_engine import evaluate
+
             return evaluate(
                 generated=args["generated_text"],
                 output_type=args["output_type"],

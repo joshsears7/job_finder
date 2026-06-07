@@ -146,10 +146,10 @@ _pg = st.navigation(
         st.Page("pages/4_Write.py", title="Writing Suite"),
         st.Page("pages/5_Interview.py", title="Interview Prep"),
         st.Page("pages/3_LinkedIn.py", title="LinkedIn"),
+        st.Page("pages/7_Market.py", title="Market Intel"),
         st.Page("pages/6_Track.py", title="Track Apps"),
         st.Page("pages/8_Profile.py", title="My Profile"),
         st.Page("pages/10_Stats.py", title="Analytics"),
-        st.Page("pages/7_Market.py", title="Market Intel"),
     ]
 )
 

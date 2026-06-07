@@ -198,80 +198,69 @@ with tab_about:
         "A strong About section shows up in recruiter keyword searches and converts profile views into connection requests."
     )
 
-    if not profile:
-        st.markdown(
-            alert("Upload your resume on the Dashboard first.", "blue"), unsafe_allow_html=True
+    c_ab1, c_ab2 = st.columns(2)
+    tr_ab = c_ab1.text_input(
+        "Target role",
+        value=profile.get("titles", [""])[0] if profile.get("titles") else "",
+        placeholder="e.g. Data Analyst",
+        key="li_ab_role",
+    )
+
+    col_abt, col_bullets = st.tabs(["About Section", "Rewrite Bullets for LinkedIn"])
+
+    with col_abt:
+        gen_about_btn = st.button(
+            "Generate About Section", type="primary", key="li_gen_about"
         )
-    else:
-        c_ab1, c_ab2 = st.columns(2)
-        tr_ab = c_ab1.text_input(
-            "Target role",
-            value=profile.get("titles", [""])[0] if profile.get("titles") else "",
-            placeholder="e.g. Data Analyst",
-            key="li_ab_role",
-        )
 
-        col_abt, col_bullets = st.tabs(["About Section", "Rewrite Bullets for LinkedIn"])
+        if gen_about_btn:
+            st.session_state.pop("li_about", None)
 
-        with col_abt:
-            ab_c1, ab_c2 = st.columns([3, 1])
-            with ab_c2:
-                if st.button("⚡ Stream with Sonnet", key="li_gen_about_stream"):
-                    st.session_state.pop("li_about", None)
-            with ab_c1:
-                gen_about_btn = st.button(
-                    "Generate About Section", type="primary", key="li_gen_about"
+        about = st.session_state.get("li_about", "")
+
+        if gen_about_btn:
+            st.caption("Claude Sonnet is writing your About section…")
+            streamed = st.write_stream(stream_about_claude(profile, tr_ab))
+            st.session_state["li_about"] = streamed
+            about = streamed
+            st.rerun()
+
+        if about:
+            st.text_area(
+                "Generated About section (copy to LinkedIn)",
+                value=about,
+                height=380,
+                key="li_about_display",
+            )
+            st.caption(f"{len(about)} characters — LinkedIn About supports up to 2,600.")
+            try:
+                from eval_engine import evaluate
+
+                ev = evaluate(
+                    about,
+                    "linkedin_about",
+                    resume_text=profile.get("raw_text", ""),
+                    persist=True,
                 )
-
-            if gen_about_btn:
-                st.session_state.pop("li_about", None)
-
-            about = st.session_state.get("li_about", "")
-
-            if gen_about_btn:
-                st.caption("Claude Sonnet is writing your About section…")
-                streamed = st.write_stream(stream_about_claude(profile, tr_ab))
-                st.session_state["li_about"] = streamed
-                about = streamed
-                st.rerun()
-
-            if about:
-                st.text_area(
-                    "Generated About section (copy to LinkedIn)",
-                    value=about,
-                    height=380,
-                    key="li_about_display",
+                grade_color = {
+                    "A": "#10b981",
+                    "B": "#3b82f6",
+                    "C": "#f59e0b",
+                    "D": "#f97316",
+                    "F": "#ef4444",
+                }.get(ev["grade"], "#64748b")
+                st.markdown(
+                    f"<div style='display:flex;gap:16px;align-items:center;margin-top:8px'>"
+                    f"<span style='font-size:11px;color:#64748b'>Quality:</span>"
+                    f"<span style='font-size:13px;font-weight:900;color:{grade_color}'>Grade {ev['grade']} ({ev['overall']}%)</span>"
+                    f"<span style='font-size:11px;color:#64748b'>Grounding: {ev['grounding']}% · Specificity: {ev['specificity']}%</span>"
+                    f"</div>",
+                    unsafe_allow_html=True,
                 )
-                st.caption(f"{len(about)} characters — LinkedIn About supports up to 2,600.")
-                # Quality eval
-                try:
-                    from eval_engine import evaluate
-
-                    ev = evaluate(
-                        about,
-                        "linkedin_about",
-                        resume_text=profile.get("raw_text", ""),
-                        persist=True,
-                    )
-                    grade_color = {
-                        "A": "#10b981",
-                        "B": "#3b82f6",
-                        "C": "#f59e0b",
-                        "D": "#f97316",
-                        "F": "#ef4444",
-                    }.get(ev["grade"], "#64748b")
-                    st.markdown(
-                        f"<div style='display:flex;gap:16px;align-items:center;margin-top:8px'>"
-                        f"<span style='font-size:11px;color:#64748b'>Quality:</span>"
-                        f"<span style='font-size:13px;font-weight:900;color:{grade_color}'>Grade {ev['grade']} ({ev['overall']}%)</span>"
-                        f"<span style='font-size:11px;color:#64748b'>Grounding: {ev['grounding']}% · Specificity: {ev['specificity']}%</span>"
-                        f"</div>",
-                        unsafe_allow_html=True,
-                    )
-                    for flag in ev.get("flags", []):
-                        st.caption(f"⚠ {flag}")
-                except Exception:
-                    pass
+                for flag in ev.get("flags", []):
+                    st.caption(f"⚠ {flag}")
+            except Exception:
+                pass
 
         with col_bullets:
             st.caption(
@@ -309,45 +298,40 @@ with tab_skills:
         "LinkedIn's algorithm ranks profiles with 5+ skills higher in recruiter searches. These are the skills recruiters filter on for your target role."
     )
 
-    if not profile:
-        st.markdown(
-            alert("Upload your resume on the Dashboard first.", "blue"), unsafe_allow_html=True
-        )
-    else:
-        tr_sk = st.text_input("Target role", placeholder="e.g. Product Manager", key="li_sk_role")
-        if st.button("Get Skills to Add", type="primary", key="li_gen_skills"):
-            missing = skills_to_add(profile, tr_sk)
-            st.session_state["li_missing_skills"] = missing
+    tr_sk = st.text_input("Target role", placeholder="e.g. Product Manager", key="li_sk_role")
+    if st.button("Get Skills to Add", type="primary", key="li_gen_skills"):
+        missing = skills_to_add(profile, tr_sk)
+        st.session_state["li_missing_skills"] = missing
 
-        missing = st.session_state.get("li_missing_skills")
-        if missing is not None:
-            if missing:
-                st.markdown(
-                    "<div style='margin-top:12px'>Add these to your LinkedIn Skills section:</div>",
-                    unsafe_allow_html=True,
-                )
-                st.markdown(" ".join(chip(s, "blue") for s in missing), unsafe_allow_html=True)
-                st.markdown("<br>", unsafe_allow_html=True)
-                st.info(
-                    "💡 Take the LinkedIn Skill Assessments for SQL, Excel, or Python — passing adds a verified badge and boosts your search ranking."
-                )
-            else:
-                st.markdown(
-                    alert(
-                        "Your profile already has the top skills for this role. Consider taking LinkedIn Skill Assessments to get verification badges.",
-                        "green",
-                    ),
-                    unsafe_allow_html=True,
-                )
-
-        if profile.get("skills"):
+    missing = st.session_state.get("li_missing_skills")
+    if missing is not None:
+        if missing:
             st.markdown(
-                "<div class='section-tag' style='margin-top:16px'>Skills Already on Your Resume</div>",
+                "<div style='margin-top:12px'>Add these to your LinkedIn Skills section:</div>",
                 unsafe_allow_html=True,
             )
-            st.markdown(
-                " ".join(chip(s, "green") for s in profile["skills"]), unsafe_allow_html=True
+            st.markdown(" ".join(chip(s, "blue") for s in missing), unsafe_allow_html=True)
+            st.markdown("<br>", unsafe_allow_html=True)
+            st.info(
+                "💡 Take the LinkedIn Skill Assessments for SQL, Excel, or Python — passing adds a verified badge and boosts your search ranking."
             )
+        else:
+            st.markdown(
+                alert(
+                    "Your profile already has the top skills for this role. Consider taking LinkedIn Skill Assessments to get verification badges.",
+                    "green",
+                ),
+                unsafe_allow_html=True,
+            )
+
+    if profile.get("skills"):
+        st.markdown(
+            "<div class='section-tag' style='margin-top:16px'>Skills Already on Your Resume</div>",
+            unsafe_allow_html=True,
+        )
+        st.markdown(
+            " ".join(chip(s, "green") for s in profile["skills"]), unsafe_allow_html=True
+        )
 
 # ── Messages ──────────────────────────────────────────────────────
 with tab_msgs:
@@ -391,35 +375,29 @@ with tab_msgs:
             "<div class='section-tag'>Cold DM / Cold Email to Recruiter or Hiring Manager</div>",
             unsafe_allow_html=True,
         )
-        if not profile:
-            st.markdown(
-                alert("Upload your resume first — the DM is tailored to your background.", "blue"),
-                unsafe_allow_html=True,
-            )
-        else:
-            c_dm1, c_dm2 = st.columns(2)
-            dm_name = c_dm1.text_input("Their name", placeholder="Mike Chen", key="dm_name")
-            dm_company = c_dm2.text_input("Their company", placeholder="Stripe", key="dm_company")
-            dm_role_co = c_dm1.text_input(
-                "Their role at company", placeholder="Senior Recruiter", key="dm_role_co"
-            )
-            dm_job = c_dm2.text_input(
-                "Job you're targeting", placeholder="Business Analyst Intern", key="dm_job"
-            )
+        c_dm1, c_dm2 = st.columns(2)
+        dm_name = c_dm1.text_input("Their name", placeholder="Mike Chen", key="dm_name")
+        dm_company = c_dm2.text_input("Their company", placeholder="Stripe", key="dm_company")
+        dm_role_co = c_dm1.text_input(
+            "Their role at company", placeholder="Senior Recruiter", key="dm_role_co"
+        )
+        dm_job = c_dm2.text_input(
+            "Job you're targeting", placeholder="Business Analyst Intern", key="dm_job"
+        )
 
-            if st.button("Generate Cold DM", type="primary", key="gen_dm"):
-                with st.spinner("Drafting your message…"):
-                    dm = generate_cold_dm(profile, dm_name, dm_company, dm_role_co, dm_job)
-                    st.session_state["li_cold_dm"] = dm
+        if st.button("Generate Cold DM", type="primary", key="gen_dm"):
+            with st.spinner("Drafting your message…"):
+                dm = generate_cold_dm(profile, dm_name, dm_company, dm_role_co, dm_job)
+                st.session_state["li_cold_dm"] = dm
 
-            dm_text = st.session_state.get("li_cold_dm", "")
-            if dm_text:
-                st.text_area(
-                    "Cold DM (edit before sending)", value=dm_text, height=320, key="li_dm_display"
-                )
-                st.caption(
-                    "Fill in the [bracketed] placeholders before sending. Keep it under 300 words."
-                )
+        dm_text = st.session_state.get("li_cold_dm", "")
+        if dm_text:
+            st.text_area(
+                "Cold DM (edit before sending)", value=dm_text, height=320, key="li_dm_display"
+            )
+            st.caption(
+                "Fill in the [bracketed] placeholders before sending. Keep it under 300 words."
+            )
 
 # ── Salary Negotiation ────────────────────────────────────────────
 with tab_negotiate:

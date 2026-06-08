@@ -8,6 +8,7 @@ CareerIQ pages. Import from here rather than app.py.
 import html as _html
 
 import streamlit as st
+import streamlit.components.v1 as components
 
 import tracker
 
@@ -628,26 +629,48 @@ hr { border:none; border-top:1px solid #111827; margin:1.4rem 0 }
     .job-title { font-size:15px }
 }
 </style>
+""",
+        unsafe_allow_html=True,
+    )
+    _apply_sidebar_state()
+
+
+def _apply_sidebar_state():
+    """Set the sidebar open/collapsed to match the viewport.
+
+    `st.markdown(unsafe_allow_html=True)` injects via `dangerouslySetInnerHTML`,
+    which never executes inline <script> tags — so this needs `components.html`,
+    whose iframe is same-origin and can reach `window.parent.document`.
+
+    Desktop keeps the sidebar pinned open (it sits beside the content there).
+    On phone-width viewports Streamlit renders the sidebar as a full-screen
+    overlay drawer instead, so there we collapse it — otherwise every page
+    load would bury the dashboard under the nav menu.
+    """
+    components.html(
+        """
 <script>
-// Force sidebar open on every load — Streamlit only applies initial_sidebar_state once
 (function() {
-    function expandSidebar() {
-        // Look for the expand button (sidebar is collapsed)
-        var btn = document.querySelector('[data-testid="stExpandSidebarButton"] button');
+    var doc = window.parent.document;
+    var isPhone = window.parent.innerWidth <= 640;
+    var targetTestId = isPhone ? 'stSidebarCollapseButton' : 'stExpandSidebarButton';
+
+    function applySidebarState() {
+        var btn = doc.querySelector('[data-testid="' + targetTestId + '"] button');
         if (btn) { btn.click(); return true; }
         return false;
     }
-    // Try immediately, then poll briefly in case the DOM isn't ready yet
-    if (!expandSidebar()) {
+
+    if (!applySidebarState()) {
         var attempts = 0;
         var poll = setInterval(function() {
-            if (expandSidebar() || attempts++ > 20) clearInterval(poll);
+            if (applySidebarState() || attempts++ > 20) clearInterval(poll);
         }, 150);
     }
 })();
 </script>
 """,
-        unsafe_allow_html=True,
+        height=0,
     )
 
 
